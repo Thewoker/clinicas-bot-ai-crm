@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npm list:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(rm lib/360dialog.ts)",
+      "Bash(rm -rf app/api/callback/360dialog)"
+    ]
+  }
+}

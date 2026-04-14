@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Clinic {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  logoUrl      String?
+  primaryColor String   @default("#22c55e")
+  apiKey       String   @unique @default(cuid())
+  phone        String?
+  address      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // WhatsApp Bot (via Twilio)
+  waPhoneNumberId String?  // Twilio number in E.164, e.g. "+14155238886"
+  waBotName       String?
+  waBotWelcome    String?
+  waActive        Boolean @default(false)
+
+  users                 User[]
+  doctors               Doctor[]
+  patients              Patient[]
+  appointments          Appointment[]
+  knowledgeBase         KnowledgeBase[]
+  doctorAvailability    DoctorAvailability[]
+  whatsappConversations WhatsappConversation[]
+
+  @@map("clinics")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clinicId  String
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@map("users")
+}
+
+model Doctor {
+  id        String   @id @default(cuid())
+  clinicId  String
+  name      String
+  specialty String
+  email     String
+  phone     String?
+  avatarUrl String?
+  color     String   @default("#6366f1")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic       Clinic               @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  availability DoctorAvailability[]
+
+  @@map("doctors")
+}
+
+model DoctorAvailability {
+  id        String @id @default(cuid())
+  clinicId  String
+  doctorId  String
+  dayOfWeek Int    // 0=Sunday, 1=Monday … 6=Saturday
+  startTime String // "09:00"
+  endTime   String // "17:00"
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, dayOfWeek])
+  @@map("doctor_availability")
+}
+
+model Patient {
+  id        String    @id @default(cuid())
+  clinicId  String
+  name      String
+  email     String?
+  phone     String
+  birthDate DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  clinic                Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments          Appointment[]
+  whatsappConversations WhatsappConversation[]
+
+  @@map("patients")
+}
+
+model Appointment {
+  id        String            @id @default(cuid())
+  clinicId  String
+  doctorId  String
+  patientId String
+  service   String
+  price     Decimal           @db.Decimal(10, 2)
+  startTime DateTime
+  endTime   DateTime
+  status    AppointmentStatus @default(SCHEDULED)
+  notes     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("appointments")
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  clinicId  String
+  question  String
+  answer    String
+  category  String?
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@map("knowledge_base")
+}
+
+model WhatsappConversation {
+  id           String   @id @default(cuid())
+  clinicId     String
+  patientPhone String   // número del paciente (sin +, ej: 5491112345678)
+  patientId    String?  // asociado una vez identificado en el sistema
+  messages     Json     @default("[]") // MessageParam[] de Anthropic
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clinic  Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@unique([clinicId, patientPhone])
+  @@map("whatsapp_conversations")
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
