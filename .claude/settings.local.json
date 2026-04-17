@@ -9,7 +9,8 @@
       "Bash(rm lib/360dialog.ts)",
       "Bash(rm -rf app/api/callback/360dialog)",
       "Bash(node -e \"const p=require\\(''./package.json''\\); console.log\\(''next:'', p.dependencies.next, ''react:'', p.dependencies.react\\)\")",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/leone/OneDrive/Escritorio/git/clinicas-bot-ai-crm/app/api -name \"*.ts\" -exec grep -l \"PUT\\\\|PATCH\" {} \\\\;)"
     ]
   }
 }

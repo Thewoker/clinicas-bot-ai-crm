@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
-type ActionResult = { error: string } | { success: string };
+type ActionResult = { error: string } | { success: string; notifyFailed?: string };
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
@@ -120,38 +120,45 @@ export async function updateAppointment(
   });
 
   // Optional WhatsApp notification to patient
-  if (notifyPatient && existing.patient.phone) {
-    try {
-      const clinic = await prisma.clinic.findUnique({
-        where: { id: session.clinicId },
-        select: { waPhoneNumberId: true, waActive: true },
-      });
+  let notifyFailed: string | undefined;
+  if (notifyPatient) {
+    if (!existing.patient.phone) {
+      notifyFailed = "El paciente no tiene teléfono registrado";
+    } else {
+      try {
+        const clinic = await prisma.clinic.findUnique({
+          where: { id: session.clinicId },
+          select: { waPhoneNumberId: true, waActive: true },
+        });
 
-      if (clinic?.waActive && clinic.waPhoneNumberId) {
-        const { sendWhatsAppMessage } = await import("@/lib/twilio");
-        const { format } = await import("date-fns");
-        const { es } = await import("date-fns/locale");
+        if (!clinic?.waActive || !clinic.waPhoneNumberId) {
+          notifyFailed = "WhatsApp no está configurado en la clínica";
+        } else {
+          const { sendWhatsAppMessage } = await import("@/lib/twilio");
+          const { format } = await import("date-fns");
+          const { es } = await import("date-fns/locale");
 
-        const dateStr = format(
-          startTime,
-          "EEEE d 'de' MMMM 'a las' HH:mm",
-          { locale: es }
-        );
+          const dateStr = format(
+            startTime,
+            "EEEE d 'de' MMMM 'a las' HH:mm",
+            { locale: es }
+          );
 
-        const msg =
-          status === "CANCELLED"
-            ? `Hola ${existing.patient.name} 👋 Tu turno con ${existing.doctor.name} del ${dateStr} fue cancelado por la clínica. Si querés reprogramarlo, escribinos y te buscamos un nuevo horario.`
-            : `Hola ${existing.patient.name} 👋 Tu turno fue modificado:\n\n📅 ${dateStr}\n👨‍⚕️ ${existing.doctor.name}\n\n¿Confirmás el nuevo horario? Respondé "Sí" o escribinos si necesitás otro día.`;
+          const msg =
+            status === "CANCELLED"
+              ? `Hola ${existing.patient.name} 👋 Tu turno con ${existing.doctor.name} del ${dateStr} fue cancelado por la clínica. Si querés reprogramarlo, escribinos y te buscamos un nuevo horario.`
+              : `Hola ${existing.patient.name} 👋 Tu turno fue modificado:\n\n📅 ${dateStr}\n👨‍⚕️ ${existing.doctor.name}\n\n¿Confirmás el nuevo horario? Respondé "Sí" o escribinos si necesitás otro día.`;
 
-        await sendWhatsAppMessage(
-          clinic.waPhoneNumberId,
-          existing.patient.phone,
-          msg
-        );
+          await sendWhatsAppMessage(
+            clinic.waPhoneNumberId,
+            existing.patient.phone,
+            msg
+          );
+        }
+      } catch (err) {
+        console.error("[appointments] WhatsApp notification failed:", err);
+        notifyFailed = "No se pudo enviar la notificación por WhatsApp";
       }
-    } catch (err) {
-      console.error("[appointments] WhatsApp notification failed:", err);
-      // Non-fatal: update already succeeded
     }
   }
 
@@ -159,6 +166,7 @@ export async function updateAppointment(
   revalidatePath("/");
   return {
     success: status === "CANCELLED" ? "Turno cancelado" : "Turno actualizado",
+    notifyFailed,
   };
 }
 
@@ -190,31 +198,39 @@ export async function cancelAppointment(
     data: { status: "CANCELLED" as never },
   });
 
-  if (notifyPatient && existing.patient.phone) {
-    try {
-      const clinic = await prisma.clinic.findUnique({
-        where: { id: session.clinicId },
-        select: { waPhoneNumberId: true, waActive: true },
-      });
-      if (clinic?.waActive && clinic.waPhoneNumberId) {
-        const { sendWhatsAppMessage } = await import("@/lib/twilio");
-        const { format } = await import("date-fns");
-        const { es } = await import("date-fns/locale");
-        const dateStr = format(existing.startTime, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
-        await sendWhatsAppMessage(
-          clinic.waPhoneNumberId,
-          existing.patient.phone,
-          `Hola ${existing.patient.name} 👋 Tu turno con ${existing.doctor.name} del ${dateStr} fue cancelado por la clínica. Si querés reprogramarlo, escribinos y te buscamos un nuevo horario.`
-        );
+  let notifyFailed: string | undefined;
+  if (notifyPatient) {
+    if (!existing.patient.phone) {
+      notifyFailed = "El paciente no tiene teléfono registrado";
+    } else {
+      try {
+        const clinic = await prisma.clinic.findUnique({
+          where: { id: session.clinicId },
+          select: { waPhoneNumberId: true, waActive: true },
+        });
+        if (!clinic?.waActive || !clinic.waPhoneNumberId) {
+          notifyFailed = "WhatsApp no está configurado en la clínica";
+        } else {
+          const { sendWhatsAppMessage } = await import("@/lib/twilio");
+          const { format } = await import("date-fns");
+          const { es } = await import("date-fns/locale");
+          const dateStr = format(existing.startTime, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+          await sendWhatsAppMessage(
+            clinic.waPhoneNumberId,
+            existing.patient.phone,
+            `Hola ${existing.patient.name} 👋 Tu turno con ${existing.doctor.name} del ${dateStr} fue cancelado por la clínica. Si querés reprogramarlo, escribinos y te buscamos un nuevo horario.`
+          );
+        }
+      } catch (err) {
+        console.error("[appointments] WhatsApp notification failed:", err);
+        notifyFailed = "No se pudo enviar la notificación por WhatsApp";
       }
-    } catch (err) {
-      console.error("[appointments] WhatsApp notification failed:", err);
     }
   }
 
   revalidatePath("/calendar");
   revalidatePath("/");
-  return { success: "Turno cancelado" };
+  return { success: "Turno cancelado", notifyFailed };
 }
 
 // ─── Simple status update (legacy, kept for compatibility) ────────────────────

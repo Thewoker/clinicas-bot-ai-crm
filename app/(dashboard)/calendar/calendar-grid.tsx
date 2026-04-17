@@ -284,12 +284,13 @@ function EditModal({
   const [result, action, pending] = useActionState(updateAppointment, null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelWarning, setCancelWarning] = useState<string | null>(null);
   const [cancelPending, startCancelTransition] = useTransition();
   const router = useRouter();
   useEscKey(onClose);
 
   useEffect(() => {
-    if (result && "success" in result) setTimeout(onClose, 700);
+    if (result && "success" in result && !result.notifyFailed) setTimeout(onClose, 700);
   }, [result]);
 
   function handleCancel() {
@@ -302,7 +303,11 @@ function EditModal({
         setCancelError(res.error);
       } else {
         router.refresh();
-        onClose();
+        if (res.notifyFailed) {
+          setCancelWarning(`Turno cancelado · Notificación no enviada: ${res.notifyFailed}`);
+        } else {
+          onClose();
+        }
       }
     });
   }
@@ -467,71 +472,92 @@ function EditModal({
             </p>
           )}
           {result && "success" in result && (
-            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-              {result.success}
-            </p>
+            <div className="space-y-1.5">
+              <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                {result.success}
+              </p>
+              {result.notifyFailed && (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Notificación no enviada: {result.notifyFailed}
+                </p>
+              )}
+            </div>
           )}
 
-          <div className="flex items-center justify-between pt-1">
-            <button
-              type="button"
-              onClick={() => setConfirmCancel(!confirmCancel)}
-              className="text-sm text-red-400 hover:text-red-600 transition-colors"
-            >
-              Cancelar turno
-            </button>
-            <button
-              type="submit"
-              disabled={pending}
-              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
-            >
-              {pending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Guardar cambios
-            </button>
-          </div>
-        </form>
-
-        {/* Cancel confirmation section */}
-        {confirmCancel && (
-          <div className="px-6 pb-5 border-t border-gray-100 pt-4">
-            <p className="text-sm font-medium text-gray-800 mb-1">
-              ¿Cancelar este turno?
-            </p>
-            <p className="text-xs text-gray-400 mb-3">
-              {canNotifyWhatsapp
-                ? "Se enviará una notificación al paciente por WhatsApp."
-                : "Esta acción no se puede deshacer."}
-            </p>
-            {cancelError && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
-                {cancelError}
-              </p>
-            )}
-            <div className="flex gap-2">
+          {!confirmCancel ? (
+            <div className="flex items-center justify-between pt-1">
               <button
                 type="button"
-                disabled={cancelPending}
-                onClick={handleCancel}
-                className="flex-1 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 rounded-xl transition-colors disabled:opacity-60"
+                onClick={() => setConfirmCancel(true)}
+                className="text-sm text-red-400 hover:text-red-600 transition-colors"
               >
-                {cancelPending ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : canNotifyWhatsapp ? (
-                  "Sí, cancelar y notificar"
-                ) : (
-                  "Sí, cancelar"
-                )}
+                Cancelar turno
               </button>
               <button
-                type="button"
-                onClick={() => setConfirmCancel(false)}
-                className="flex-1 border border-gray-200 text-sm text-gray-600 py-2 rounded-xl hover:bg-gray-50 transition-colors"
+                type="submit"
+                disabled={pending}
+                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
               >
-                No
+                {pending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Guardar cambios
               </button>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-800 mb-1">
+                ¿Cancelar este turno?
+              </p>
+              <p className="text-xs text-gray-400 mb-3">
+                {canNotifyWhatsapp
+                  ? "Se enviará una notificación al paciente por WhatsApp."
+                  : "Esta acción no se puede deshacer."}
+              </p>
+              {cancelError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+                  {cancelError}
+                </p>
+              )}
+              {cancelWarning && (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                  {cancelWarning}
+                </p>
+              )}
+              {cancelWarning ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full border border-gray-200 text-sm text-gray-600 py-2 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Cerrar
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={cancelPending}
+                    onClick={handleCancel}
+                    className="flex-1 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 rounded-xl transition-colors disabled:opacity-60"
+                  >
+                    {cancelPending ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : canNotifyWhatsapp ? (
+                      "Sí, cancelar y notificar"
+                    ) : (
+                      "Sí, cancelar"
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmCancel(false)}
+                    className="flex-1 border border-gray-200 text-sm text-gray-600 py-2 rounded-xl hover:bg-gray-50 transition-colors"
+                  >
+                    No
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </form>
       </div>
     </div>
   );

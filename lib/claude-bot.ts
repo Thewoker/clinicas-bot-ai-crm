@@ -167,6 +167,29 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "reagendar_turno",
+    description:
+      "Cambia la fecha/hora de un turno existente a un nuevo horario. Cancela el turno original y crea uno nuevo automáticamente. Usá esta herramienta (NO crear_turno + cancelar_turno por separado) cuando el paciente quiere cambiar el horario de un turno ya agendado.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        appointmentId: {
+          type: "string",
+          description: "ID del turno a reagendar (obtenelo con listar_turnos_paciente)",
+        },
+        startTime: {
+          type: "string",
+          description: "Nuevo inicio en ISO 8601 con offset de zona horaria, ej: 2026-04-17T16:30:00-03:00",
+        },
+        endTime: {
+          type: "string",
+          description: "Nuevo fin en ISO 8601 con offset de zona horaria (siempre 30 min después del inicio)",
+        },
+      },
+      required: ["appointmentId", "startTime", "endTime"],
+    },
+  },
+  {
     name: "buscar_proxima_disponibilidad",
     description:
       "Busca los próximos días con turnos libres para un médico. Usalo cuando el paciente pregunta cuándo hay disponibilidad o cuando verificar_disponibilidad no encuentra slots en una fecha.",
@@ -429,6 +452,85 @@ async function executeTool(
       return { success: true, message: "Turno cancelado correctamente" };
     }
 
+    case "reagendar_turno": {
+      const newStart = new Date(input.startTime);
+      const newEnd = new Date(input.endTime);
+
+      // Fetch the original appointment
+      const original = await prisma.appointment.findFirst({
+        where: { id: input.appointmentId, clinicId },
+        include: {
+          doctor: { select: { name: true } },
+          patient: { select: { name: true } },
+        },
+      });
+      if (!original) return { success: false, error: "Turno original no encontrado" };
+      if (original.status === "CANCELLED") return { success: false, error: "El turno ya estaba cancelado" };
+
+      // Validate doctor availability for the new day/time
+      const newStartLocal = toTzDate(newStart, tz);
+      const avail = await prisma.doctorAvailability.findFirst({
+        where: { doctorId: original.doctorId, dayOfWeek: newStartLocal.getUTCDay() },
+      });
+      if (!avail) return { success: false, error: "El médico no trabaja ese día" };
+
+      const toHHMM = (d: Date) => {
+        const local = toTzDate(d, tz);
+        return `${local.getUTCHours().toString().padStart(2, "0")}:${local.getUTCMinutes().toString().padStart(2, "0")}`;
+      };
+      if (toHHMM(newStart) < avail.startTime || toHHMM(newEnd) > avail.endTime) {
+        return {
+          success: false,
+          error: `El médico solo atiende de ${avail.startTime} a ${avail.endTime}`,
+        };
+      }
+
+      // Check overlap — exclude the appointment being rescheduled
+      const overlap = await prisma.appointment.findFirst({
+        where: {
+          clinicId,
+          doctorId: original.doctorId,
+          id: { not: input.appointmentId },
+          status: { notIn: ["CANCELLED", "NO_SHOW"] },
+          OR: [{ startTime: { lt: newEnd }, endTime: { gt: newStart } }],
+        },
+      });
+      if (overlap) return { success: false, error: "Ese horario ya está ocupado" };
+
+      // Atomic: cancel old, create new
+      const [, newAppointment] = await prisma.$transaction([
+        prisma.appointment.update({
+          where: { id: input.appointmentId },
+          data: { status: "CANCELLED" },
+        }),
+        prisma.appointment.create({
+          data: {
+            clinicId,
+            doctorId: original.doctorId,
+            patientId: original.patientId,
+            service: original.service,
+            price: original.price,
+            startTime: newStart,
+            endTime: newEnd,
+            status: "SCHEDULED",
+          },
+        }),
+      ]);
+
+      return {
+        success: true,
+        message: "Turno reagendado correctamente",
+        newAppointment: {
+          id: newAppointment.id,
+          doctor: original.doctor.name,
+          patient: original.patient.name,
+          service: original.service,
+          startTime: newAppointment.startTime.toISOString(),
+          endTime: newAppointment.endTime.toISOString(),
+        },
+      };
+    }
+
     case "buscar_proxima_disponibilidad": {
       const dias = Math.min(Number(input.diasAdelante) || 14, 30);
 
@@ -554,6 +656,7 @@ REGLAS ESTRICTAS DE USO DE HERRAMIENTAS — NUNCA ADIVINES, SIEMPRE CONSULTÁ:
 - Cuando el paciente pide un especialista (ej: "ginecólogo", "cardiólogo"), SIEMPRE llamá listar_medicos sin filtro, leé la lista completa y buscá el médico cuya especialidad coincida semánticamente — las especialidades en la DB están en español y en forma sustantiva (ej: "Ginecologia"), nunca rechaces sin antes consultar la lista completa
 - Para crear un turno: el endTime es siempre 30 minutos después del startTime
 - SIEMPRE incluí la zona horaria del servidor en los ISO 8601 de startTime y endTime, ej: 2026-04-15T14:00:00${tzStr}. NUNCA omitas el offset de zona horaria
+- Cuando el paciente quiere cambiar el horario de un turno existente: 1) listar_turnos_paciente para obtener el ID, 2) verificar_disponibilidad del nuevo horario, 3) reagendar_turno con el ID del turno original. NUNCA uses crear_turno + cancelar_turno por separado para reagendar
 
 ${
   clinic.knowledgeBase && clinic.knowledgeBase.length > 0
