@@ -11,6 +11,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from "@/lib/notifications";
 import { format, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -205,6 +206,21 @@ const TOOLS: Anthropic.Tool[] = [
       required: ["doctorId"],
     },
   },
+  {
+    name: "solicitar_atencion_humana",
+    description:
+      "Notifica al equipo de la clínica que el paciente quiere hablar con una persona real. Usá esta herramienta cuando el paciente exprese explícitamente que quiere hablar con un humano, un representante, o el equipo de la clínica.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        motivo: {
+          type: "string",
+          description: "Breve descripción de por qué el paciente quiere atención humana",
+        },
+      },
+      required: ["motivo"],
+    },
+  },
 ];
 
 // ─── Tool execution ───────────────────────────────────────────────────────────
@@ -213,7 +229,8 @@ async function executeTool(
   name: string,
   input: Record<string, string>,
   clinicId: string,
-  tz: string
+  tz: string,
+  patientPhone: string = ""
 ): Promise<unknown> {
   switch (name) {
     case "buscar_paciente": {
@@ -393,6 +410,17 @@ async function executeTool(
         },
       });
 
+      const appointmentLocal = toTzDate(appointment.startTime, tz);
+      const dateStr = format(appointmentLocal, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+
+      createNotification({
+        clinicId,
+        type: "APPOINTMENT_CREATED",
+        title: "Nuevo turno agendado",
+        body: `${appointment.patient.name} reservó un turno con ${appointment.doctor.name} el ${dateStr}`,
+        metadata: { appointmentId: appointment.id, patientPhone },
+      }).catch(console.error);
+
       return {
         success: true,
         appointment: {
@@ -441,6 +469,10 @@ async function executeTool(
     case "cancelar_turno": {
       const appointment = await prisma.appointment.findFirst({
         where: { id: input.appointmentId, clinicId },
+        include: {
+          doctor: { select: { name: true } },
+          patient: { select: { name: true } },
+        },
       });
       if (!appointment) return { success: false, error: "Turno no encontrado" };
 
@@ -448,6 +480,19 @@ async function executeTool(
         where: { id: input.appointmentId },
         data: { status: "CANCELLED" },
       });
+
+      const cancelDateStr = format(
+        toTzDate(appointment.startTime, tz),
+        "EEEE d 'de' MMMM 'a las' HH:mm",
+        { locale: es }
+      );
+      createNotification({
+        clinicId,
+        type: "APPOINTMENT_CANCELLED",
+        title: "Turno cancelado",
+        body: `${appointment.patient.name} canceló su turno con ${appointment.doctor.name} del ${cancelDateStr}`,
+        metadata: { appointmentId: input.appointmentId, patientPhone },
+      }).catch(console.error);
 
       return { success: true, message: "Turno cancelado correctamente" };
     }
@@ -516,6 +561,19 @@ async function executeTool(
           },
         }),
       ]);
+
+      const newDateStr = format(
+        toTzDate(newAppointment.startTime, tz),
+        "EEEE d 'de' MMMM 'a las' HH:mm",
+        { locale: es }
+      );
+      createNotification({
+        clinicId,
+        type: "APPOINTMENT_RESCHEDULED",
+        title: "Turno reagendado",
+        body: `${original.patient.name} reprogramó su turno con ${original.doctor.name} para el ${newDateStr}`,
+        metadata: { appointmentId: newAppointment.id, patientPhone },
+      }).catch(console.error);
 
       return {
         success: true,
@@ -608,6 +666,21 @@ async function executeTool(
       return { available: true, doctor: doctor.name, nextAvailableDays: results };
     }
 
+    case "solicitar_atencion_humana": {
+      createNotification({
+        clinicId,
+        type: "HUMAN_REQUESTED",
+        title: "Atención humana solicitada",
+        body: `Un paciente solicita hablar con un representante${input.motivo ? `: ${input.motivo}` : ""}`,
+        metadata: { patientPhone, motivo: input.motivo ?? "" },
+      }).catch(console.error);
+
+      return {
+        success: true,
+        message: "Notificamos al equipo. Un representante se pondrá en contacto a la brevedad.",
+      };
+    }
+
     default:
       return { error: `Herramienta desconocida: ${name}` };
   }
@@ -645,6 +718,7 @@ REGLAS DE COMPORTAMIENTO:
 - Si el paciente ya está registrado, saludalo por su nombre
 - Respondé mensajes cortos con respuestas cortas, no seas verboso
 - En caso de errores técnicos, disculpate y sugerí contactar a la clínica directamente
+- Si el paciente pide hablar con una persona real, un representante o el equipo de la clínica, usá la herramienta solicitar_atencion_humana e informale que el equipo lo contactará pronto
 
 REGLAS ESTRICTAS DE USO DE HERRAMIENTAS — NUNCA ADIVINES, SIEMPRE CONSULTÁ:
 - NUNCA digas que un médico "no trabaja" un día sin antes llamar a verificar_disponibilidad para esa fecha exacta
@@ -673,7 +747,8 @@ ${clinic.knowledgeBase
 export async function runBot(
   clinic: ClinicContext,
   history: BotMessage[],
-  newUserMessage: string
+  newUserMessage: string,
+  patientPhone: string = ""
 ): Promise<{ reply: string; updatedHistory: BotMessage[] }> {
   // Load knowledge base if not already provided
   if (!clinic.knowledgeBase) {
@@ -732,7 +807,8 @@ export async function runBot(
             block.name,
             block.input as Record<string, string>,
             clinic.id,
-            clinic.timezone
+            clinic.timezone,
+            patientPhone
           );
           return {
             type: "tool_result" as const,

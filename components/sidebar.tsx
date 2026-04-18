@@ -11,6 +11,7 @@ import {
   HelpCircle,
   Settings,
   Activity,
+  MessageSquare,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/calendar", label: "Calendario", icon: Calendar },
   { href: "/patients", label: "Pacientes", icon: Users },
   { href: "/doctors", label: "Médicos", icon: Stethoscope },
+  { href: "/conversations", label: "Conversaciones", icon: MessageSquare },
   { href: "/knowledge-base", label: "Base de IA", icon: BookOpen },
 ];
 

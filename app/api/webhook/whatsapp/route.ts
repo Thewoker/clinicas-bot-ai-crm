@@ -6,18 +6,22 @@
  * clinic by matching the "To" phone number to the clinic's waPhoneNumberId.
  *
  * Twilio sends webhooks as application/x-www-form-urlencoded with fields:
- *   Body  — message text
- *   From  — sender (patient), e.g. "whatsapp:+5491112345678"
- *   To    — receiving number (clinic), e.g. "whatsapp:+14155238886"
+ *   Body              — message text (empty for voice notes)
+ *   From              — sender (patient), e.g. "whatsapp:+5491112345678"
+ *   To                — receiving number (clinic), e.g. "whatsapp:+14155238886"
+ *   NumMedia          — number of media attachments (0 for text, 1+ for media)
+ *   MediaUrl0         — URL to the first media file (audio/ogg for voice notes)
+ *   MediaContentType0 — MIME type of the first media file
  *
  * Flow:
  *  1. Parse Twilio form-urlencoded payload
- *  2. Identify clinic via "To" phone number (waPhoneNumberId)
- *  3. Load / create conversation history
- *  4. Run Claude bot (tool use loop)
- *  5. Send reply via Twilio API
- *  6. Persist updated history
- *  7. Return empty TwiML <Response/>
+ *  2. If audio message → transcribe with OpenAI Whisper
+ *  3. Identify clinic via "To" phone number (waPhoneNumberId)
+ *  4. Load / create conversation history
+ *  5. Run Claude bot (tool use loop)
+ *  6. Send reply via Twilio API
+ *  7. Persist updated history
+ *  8. Return empty TwiML <Response/>
  *
  * GET /api/webhook/whatsapp — simple health check
  */
@@ -26,6 +30,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessage, parseWhatsAppNumber } from "@/lib/twilio";
 import { runBot, BotMessage, ClinicContext } from "@/lib/claude-bot";
+import { transcribeWhatsAppAudio } from "@/lib/transcription";
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response/>';
 
@@ -43,7 +48,6 @@ export async function GET() {
 
 // ─── Incoming message handler ─────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  // Twilio sends form-urlencoded, not JSON
   let params: URLSearchParams;
   try {
     const text = await req.text();
@@ -52,19 +56,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const messageBody = params.get("Body")?.trim() ?? "";
-  const from = params.get("From") ?? ""; // "whatsapp:+5491112345678"
-  const to = params.get("To") ?? "";     // "whatsapp:+14155238886"
+  const from = params.get("From") ?? "";
+  const to = params.get("To") ?? "";
+  const numMedia = parseInt(params.get("NumMedia") ?? "0", 10);
+  const mediaUrl = params.get("MediaUrl0") ?? "";
+  const mediaContentType = params.get("MediaContentType0") ?? "";
+  const rawBody = params.get("Body")?.trim() ?? "";
 
-  // Ignore status callbacks and empty messages
-  if (!from || !to || !messageBody) {
+  const isAudio = numMedia > 0 && mediaContentType.startsWith("audio/");
+  const hasContent = rawBody.length > 0 || isAudio;
+
+  // Ignore status callbacks and messages with no content
+  if (!from || !to || !hasContent) {
     return twimlOk();
   }
 
-  const patientPhone = parseWhatsAppNumber(from); // "+5491112345678"
-  const clinicPhone = parseWhatsAppNumber(to);    // "+14155238886"
+  const patientPhone = parseWhatsAppNumber(from);
+  const clinicPhone = parseWhatsAppNumber(to);
 
-  // Find the clinic that owns this WhatsApp number
   const clinic = await prisma.clinic.findFirst({
     where: { waPhoneNumberId: clinicPhone },
   });
@@ -78,8 +87,31 @@ export async function POST(req: NextRequest) {
     return twimlOk();
   }
 
+  // Resolve the text to send to the bot
+  let messageText = rawBody;
+
+  if (isAudio) {
+    try {
+      const transcription = await transcribeWhatsAppAudio(mediaUrl, mediaContentType);
+      console.log(`[webhook] Transcribed audio from ${patientPhone}: "${transcription}"`);
+      messageText = transcription;
+    } catch (err) {
+      console.error(`[webhook] Audio transcription failed for ${patientPhone}:`, err);
+      await sendWhatsAppMessage(
+        clinic.waPhoneNumberId!,
+        patientPhone,
+        "Lo siento, no pude procesar tu mensaje de voz. ¿Podés escribirme lo que necesitás?"
+      ).catch(() => {});
+      return twimlOk();
+    }
+  }
+
+  if (!messageText) {
+    return twimlOk();
+  }
+
   try {
-    await handleMessage(clinic, patientPhone, messageBody);
+    await handleMessage(clinic, patientPhone, messageText);
   } catch (err) {
     console.error(`[webhook] Error handling message from ${patientPhone}:`, err);
     await sendWhatsAppMessage(
@@ -89,7 +121,6 @@ export async function POST(req: NextRequest) {
     ).catch(() => {});
   }
 
-  // Always return 200 so Twilio doesn't retry
   return twimlOk();
 }
 
@@ -109,14 +140,10 @@ async function handleMessage(
   patientPhone: string,
   text: string
 ) {
-  // Load or create conversation record
   let conversation = await prisma.whatsappConversation.findUnique({
-    where: {
-      clinicId_patientPhone: { clinicId: clinic.id, patientPhone },
-    },
+    where: { clinicId_patientPhone: { clinicId: clinic.id, patientPhone } },
   });
 
-  // Reset conversation history if stale (24h without activity)
   const isStale =
     conversation &&
     Date.now() - new Date(conversation.updatedAt).getTime() > 24 * 60 * 60 * 1000;
@@ -146,14 +173,12 @@ async function handleMessage(
     timezone: clinic.timezone,
   };
 
-  const { reply, updatedHistory } = await runBot(clinicCtx, history, text);
+  const { reply, updatedHistory } = await runBot(clinicCtx, history, text, patientPhone);
 
-  // Persist updated history
   await prisma.whatsappConversation.update({
     where: { id: conversation.id },
     data: { messages: updatedHistory as unknown as never[] },
   });
 
-  // Send reply via Twilio API (not TwiML — allows async processing pattern)
   await sendWhatsAppMessage(clinic.waPhoneNumberId!, patientPhone, reply);
 }

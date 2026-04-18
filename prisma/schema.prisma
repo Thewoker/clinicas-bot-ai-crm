@@ -34,6 +34,7 @@ model Clinic {
   knowledgeBase         KnowledgeBase[]
   doctorAvailability    DoctorAvailability[]
   whatsappConversations WhatsappConversation[]
+  notifications         Notification[]
 
   @@map("clinics")
 }
@@ -158,12 +159,34 @@ model WhatsappConversation {
   @@map("whatsapp_conversations")
 }
 
+model Notification {
+  id        String           @id @default(cuid())
+  clinicId  String
+  type      NotificationType
+  title     String
+  body      String
+  read      Boolean          @default(false)
+  metadata  Json             @default("{}")
+  createdAt DateTime         @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
 enum AppointmentStatus {
   SCHEDULED
   CONFIRMED
   COMPLETED
   CANCELLED
   NO_SHOW
+}
+
+enum NotificationType {
+  APPOINTMENT_CREATED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+  HUMAN_REQUESTED
 }
 
 enum UserRole {
