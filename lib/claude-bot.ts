@@ -688,7 +688,7 @@ async function executeTool(
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(clinic: ClinicContext): string {
+function buildSystemPrompt(clinic: ClinicContext, patientPhone = ""): string {
   const botName = clinic.waBotName ?? `Asistente de ${clinic.name}`;
   const offsetMin = tzOffsetMin(clinic.timezone);
   const tzStr = fmtTzOffset(offsetMin);
@@ -714,8 +714,9 @@ REGLAS DE COMPORTAMIENTO:
 - Antes de crear un turno, confirmá el médico, día, hora y servicio con el paciente
 - Antes de cancelar un turno, pedí confirmación explícita
 - Si hay ambigüedad en la fecha (ej: "el viernes"), asumí el próximo que venga
-- Cuando el paciente da su nombre, buscalo en el sistema antes de pedirle más datos
+- Cuando el paciente da su nombre, buscalo en el sistema antes de pedirle más datos${patientPhone ? ` — podés buscarlo también por su número de WhatsApp: ${patientPhone}` : ""}
 - Si el paciente ya está registrado, saludalo por su nombre
+- Para identificar al paciente, preferí siempre buscar primero por su número de teléfono (más confiable que el nombre); solo buscá por nombre si el teléfono no da resultados${patientPhone ? `\n- El número de WhatsApp desde el que escribe este paciente es: ${patientPhone}. Usalo como primera búsqueda en buscar_paciente antes de pedir el nombre` : ""}
 - Respondé mensajes cortos con respuestas cortas, no seas verboso
 - En caso de errores técnicos, disculpate y sugerí contactar a la clínica directamente
 - Si el paciente pide hablar con una persona real, un representante o el equipo de la clínica, usá la herramienta solicitar_atencion_humana e informale que el equipo lo contactará pronto
@@ -775,7 +776,7 @@ export async function runBot(
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001", // fast + cheap for chatbot
       max_tokens: 1024,
-      system: buildSystemPrompt(clinic),
+      system: buildSystemPrompt(clinic, patientPhone),
       tools: TOOLS,
       messages: current as Anthropic.MessageParam[],
     });
