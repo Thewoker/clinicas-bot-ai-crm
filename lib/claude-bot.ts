@@ -766,8 +766,23 @@ export async function runBot(
     { role: "user", content: newUserMessage },
   ];
 
-  // Keep last 30 messages to avoid token limits
-  const trimmed = messages.slice(-30);
+  // Keep last 30 messages to avoid token limits.
+  // After slicing, advance past any leading orphaned tool_result messages —
+  // these appear when the slice cuts out the preceding assistant tool_use block,
+  // which causes Anthropic to reject the request with a 400.
+  const raw = messages.slice(-30);
+  let startAt = 0;
+  while (startAt < raw.length) {
+    const m = raw[startAt];
+    if (m.role === "user") {
+      const c = m.content;
+      const isToolResult =
+        Array.isArray(c) && c.length > 0 && (c as { type: string }[])[0].type === "tool_result";
+      if (!isToolResult) break;
+    }
+    startAt++;
+  }
+  const trimmed = raw.slice(startAt);
 
   let current = [...trimmed];
 
