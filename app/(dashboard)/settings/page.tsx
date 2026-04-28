@@ -98,12 +98,12 @@ export default async function SettingsPage() {
         </div>
         <div className="px-6 py-5">
           <WhatsappForm
+            clinicId={clinic.id}
             waActive={clinic.waActive}
             waPhoneNumberId={clinic.waPhoneNumberId}
             waBotName={clinic.waBotName}
             waBotWelcome={clinic.waBotWelcome}
             clinicName={clinic.name}
-            appUrl={process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}
           />
         </div>
       </section>

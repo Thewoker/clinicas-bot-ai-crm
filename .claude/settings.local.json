@@ -10,7 +10,12 @@
       "Bash(rm -rf app/api/callback/360dialog)",
       "Bash(node -e \"const p=require\\(''./package.json''\\); console.log\\(''next:'', p.dependencies.next, ''react:'', p.dependencies.react\\)\")",
       "Bash(xargs grep:*)",
-      "Bash(find /c/Users/leone/OneDrive/Escritorio/git/clinicas-bot-ai-crm/app/api -name \"*.ts\" -exec grep -l \"PUT\\\\|PATCH\" {} \\\\;)"
+      "Bash(find /c/Users/leone/OneDrive/Escritorio/git/clinicas-bot-ai-crm/app/api -name \"*.ts\" -exec grep -l \"PUT\\\\|PATCH\" {} \\\\;)",
+      "Bash(npm uninstall *)",
+      "Bash(node -e \"const b = require\\('c:/Users/leone/Desktop/git/clinicas-cistina-mar/node_modules/@whiskeysockets/baileys'\\); console.log\\('keys:', Object.keys\\(b\\).slice\\(0,10\\)\\); console.log\\('has makeWASocket:', typeof b.makeWASocket\\); console.log\\('has default:', typeof b.default\\);\")",
+      "Bash(node -e \"const b = require\\('c:/Users/leone/Desktop/git/clinicas-cistina-mar/node_modules/@whiskeysockets/baileys'\\); console.log\\('default === makeWASocket:', b.default === b.makeWASocket\\); console.log\\('default name:', b.default?.name\\);\")",
+      "Bash(node -e \"const p = require\\('c:/Users/leone/Desktop/git/clinicas-cistina-mar/node_modules/@whiskeysockets/baileys/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(npm view *)"
     ]
   }
 }

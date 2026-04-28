@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { sendWhatsAppMessage } from "@/lib/twilio";
+import { whatsappManager } from "@/lib/whatsapp/manager";
 
 export async function GET(
   _req: NextRequest,
@@ -36,27 +36,24 @@ export async function POST(
     return NextResponse.json({ error: "Message required" }, { status: 400 });
   }
 
-  const [conv, clinic] = await Promise.all([
-    prisma.whatsappConversation.findFirst({
-      where: { id, clinicId: session.clinicId },
-    }),
-    prisma.clinic.findUnique({ where: { id: session.clinicId } }),
-  ]);
+  const conv = await prisma.whatsappConversation.findFirst({
+    where: { id, clinicId: session.clinicId },
+  });
 
   if (!conv) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  if (!clinic?.waPhoneNumberId) {
-    return NextResponse.json(
-      { error: "Número de WhatsApp de la clínica no configurado" },
-      { status: 400 }
-    );
-  }
 
   const toNumber = conv.patientPhone.startsWith("+")
     ? conv.patientPhone
     : `+${conv.patientPhone}`;
 
-  await sendWhatsAppMessage(clinic.waPhoneNumberId, toNumber, message.trim());
+  try {
+    await whatsappManager.sendMessage(session.clinicId, toNumber, message.trim());
+  } catch {
+    return NextResponse.json(
+      { error: "WhatsApp no está conectado para esta clínica" },
+      { status: 503 }
+    );
+  }
 
   const messages = (conv.messages ?? []) as Array<{ role: string; content: string }>;
   messages.push({ role: "assistant", content: message.trim() });

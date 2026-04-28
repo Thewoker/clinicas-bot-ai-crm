@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["@whiskeysockets/baileys", "@hapi/boom", "pino"],
   experimental: {
     serverActions: {
       // Allow dev tunnels (VS Code, DevTunnels, ngrok, etc.)

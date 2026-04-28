@@ -1,39 +1,40 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   saveBotSettings,
   toggleBotActive,
   disconnectWhatsapp,
-  saveWhatsappNumber,
+  connectWhatsapp,
 } from "@/app/actions/whatsapp";
 import {
   Loader2,
   CheckCircle2,
   XCircle,
   Power,
-  Copy,
-  Check,
+  Smartphone,
+  RefreshCw,
 } from "lucide-react";
 
 interface Props {
+  clinicId: string;
   waActive: boolean;
   waPhoneNumberId: string | null;
   waBotName: string | null;
   waBotWelcome: string | null;
   clinicName: string;
-  appUrl: string;
 }
 
+type QrStatus = "idle" | "connecting" | "waiting" | "qr" | "connected";
+
 export function WhatsappForm({
+  clinicId,
   waActive,
   waPhoneNumberId,
   waBotName,
   waBotWelcome,
   clinicName,
-  appUrl,
 }: Props) {
-  const webhookUrl = `${appUrl}/api/webhook/whatsapp`;
   const isConnected = !!waPhoneNumberId;
 
   const [settingsState, settingsAction, settingsPending] = useActionState(
@@ -46,31 +47,75 @@ export function WhatsappForm({
   );
   const [disconnectState, disconnectAction, disconnectPending] =
     useActionState(disconnectWhatsapp, null);
-  const [numberState, numberAction, numberPending] = useActionState(
-    saveWhatsappNumber,
+  const [connectState, connectAction, connectPending] = useActionState(
+    connectWhatsapp,
     null
   );
 
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [qrStatus, setQrStatus] = useState<QrStatus>("idle");
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Reload after toggle/disconnect so the server component re-fetches DB state
+  // Reload after toggle/disconnect
   useEffect(() => {
     if (
       (toggleState && "success" in toggleState) ||
-      (disconnectState && "success" in disconnectState) ||
-      (numberState && "success" in numberState)
+      (disconnectState && "success" in disconnectState)
     ) {
       setTimeout(() => window.location.reload(), 800);
     }
-  }, [toggleState, disconnectState, numberState]);
+  }, [toggleState, disconnectState]);
 
-  function copyWebhook() {
-    navigator.clipboard.writeText(webhookUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
+  // When connect action succeeds, start polling for QR
+  useEffect(() => {
+    if (connectState && "success" in connectState) {
+      setQrStatus("waiting");
+    }
+    if (connectState && "error" in connectState) {
+      setQrStatus("idle");
+    }
+  }, [connectState]);
+
+  // Poll for QR / connection status
+  useEffect(() => {
+    if (qrStatus !== "waiting" && qrStatus !== "qr" && qrStatus !== "connecting") {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      return;
+    }
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/whatsapp/qr/${clinicId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === "connected") {
+          setQrStatus("connected");
+          setQrImage(null);
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setTimeout(() => window.location.reload(), 1000);
+        } else if (data.status === "qr") {
+          setQrStatus("qr");
+          setQrImage(data.qr);
+        } else if (data.status === "waiting") {
+          setQrStatus("waiting");
+        }
+      } catch {}
+    };
+
+    poll();
+    pollRef.current = setInterval(poll, 2000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [clinicId, qrStatus]);
+
+  const showQrSection = !isConnected && qrStatus !== "idle";
 
   return (
     <div className="space-y-6">
@@ -132,73 +177,90 @@ export function WhatsappForm({
         )}
       </div>
 
-      {/* Connect form (if not connected) */}
+      {/* Connect section (if not connected) */}
       {!isConnected && (
         <div className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-3">
-              Configuración de Twilio
-            </p>
-
-            {/* Step 1 — Webhook URL */}
-            <div className="mb-4">
-              <p className="text-xs font-medium text-gray-600 mb-1">
-                1. Copiá esta URL y configurala como webhook en la consola de Twilio
+          {!showQrSection ? (
+            /* Initial connect button */
+            <div>
+              <p className="text-xs text-gray-500 mb-3">
+                Conectá el número de WhatsApp de la clínica escaneando un código QR
+                con tu teléfono. No se requiere cuenta empresarial.
               </p>
-              <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-                <code className="text-xs text-gray-700 font-mono flex-1 truncate">
-                  {webhookUrl}
-                </code>
+              <form action={connectAction}>
                 <button
-                  type="button"
-                  onClick={copyWebhook}
-                  className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
-                  title="Copiar URL"
+                  type="submit"
+                  disabled={connectPending}
+                  className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
                 >
-                  {copied ? (
-                    <Check className="w-4 h-4 text-emerald-500" />
+                  {connectPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Copy className="w-4 h-4" />
+                    <Smartphone className="w-4 h-4" />
                   )}
+                  Conectar WhatsApp
                 </button>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                En Twilio: Messaging → Senders → WhatsApp → tu número → Webhook URL (HTTP POST)
-              </p>
+              </form>
+              {connectState && "error" in connectState && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
+                  {connectState.error}
+                </p>
+              )}
             </div>
+          ) : (
+            /* QR polling section */
+            <div className="flex flex-col items-center gap-4 py-4">
+              {qrStatus === "connected" && (
+                <div className="flex items-center gap-2 text-emerald-600 font-semibold text-sm">
+                  <CheckCircle2 className="w-5 h-5" />
+                  ¡Conectado! Recargando...
+                </div>
+              )}
 
-            {/* Step 2 — Enter phone number */}
-            <p className="text-xs font-medium text-gray-600 mb-1">
-              2. Ingresá el número de WhatsApp de Twilio asignado a esta clínica
-            </p>
-            <form action={numberAction} className="flex gap-2">
-              <input
-                name="waPhoneNumber"
-                placeholder="+14155238886"
-                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white font-mono"
-              />
-              <button
-                type="submit"
-                disabled={numberPending}
-                className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-              >
-                {numberPending && (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                )}
-                Guardar
-              </button>
-            </form>
-            {numberState && "error" in numberState && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
-                {numberState.error}
-              </p>
-            )}
-            {numberState && "success" in numberState && (
-              <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-2">
-                {numberState.success}
-              </p>
-            )}
-          </div>
+              {(qrStatus === "waiting" || qrStatus === "connecting") && (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                  <p className="text-sm text-gray-500">
+                    Generando código QR...
+                  </p>
+                </div>
+              )}
+
+              {qrStatus === "qr" && qrImage && (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="border-2 border-emerald-200 rounded-2xl p-3 bg-white shadow-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrImage}
+                      alt="Código QR de WhatsApp"
+                      width={260}
+                      height={260}
+                      className="rounded-lg"
+                    />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-semibold text-gray-700">
+                      Escaneá este código con tu WhatsApp
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Abrí WhatsApp → Dispositivos vinculados → Vincular dispositivo
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQrStatus("idle");
+                      setQrImage(null);
+                    }}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

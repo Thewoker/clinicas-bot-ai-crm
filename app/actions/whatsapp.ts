@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { whatsappManager } from "@/lib/whatsapp/manager";
 
 type ActionResult = { error: string } | { success: string };
 
@@ -46,48 +47,27 @@ export async function toggleBotActive(
 }
 
 /**
- * Save (or clear) the clinic's Twilio WhatsApp number.
- * The number must be in E.164 format: +14155238886
- * Saving a number automatically activates the bot.
- * Sending an empty value disconnects WhatsApp.
+ * Start a new Baileys connection for this clinic.
+ * The socket is created and starts generating a QR code.
+ * The frontend then polls /api/whatsapp/qr/[clinicId] to get the QR.
  */
-export async function saveWhatsappNumber(
+export async function connectWhatsapp(
   _prev: ActionResult | null,
-  formData: FormData
+  _formData: FormData
 ): Promise<ActionResult> {
   const session = await getSession();
   if (!session) return { error: "No autorizado" };
 
-  const raw = (formData.get("waPhoneNumber") as string)?.trim() ?? "";
-
-  if (!raw) {
-    await prisma.clinic.update({
-      where: { id: session.clinicId },
-      data: { waPhoneNumberId: null, waActive: false },
-    });
-    revalidatePath("/settings");
-    return { success: "Número eliminado" };
+  try {
+    await whatsappManager.connectClinic(session.clinicId);
+    return { success: "Iniciando conexión..." };
+  } catch (err) {
+    console.error("[wa] connectWhatsapp error:", err);
+    return { error: "No se pudo iniciar la conexión. Intentá de nuevo." };
   }
-
-  if (!/^\+\d{7,15}$/.test(raw)) {
-    return {
-      error: "Formato inválido. Ingresá el número con código de país, ej: +14155238886",
-    };
-  }
-
-  await prisma.clinic.update({
-    where: { id: session.clinicId },
-    data: { waPhoneNumberId: raw, waActive: true },
-  });
-
-  revalidatePath("/settings");
-  return {
-    success:
-      "Número guardado y bot activado. Asegurate de configurar el webhook en la consola de Twilio.",
-  };
 }
 
-/** Disconnect WhatsApp — clears phone number and deactivates bot */
+/** Disconnect WhatsApp — logs out, deletes session, clears DB fields */
 export async function disconnectWhatsapp(
   _prev: ActionResult | null,
   _formData: FormData
@@ -95,12 +75,11 @@ export async function disconnectWhatsapp(
   const session = await getSession();
   if (!session) return { error: "No autorizado" };
 
+  await whatsappManager.disconnectClinic(session.clinicId);
+
   await prisma.clinic.update({
     where: { id: session.clinicId },
-    data: {
-      waPhoneNumberId: null,
-      waActive: false,
-    },
+    data: { waPhoneNumberId: null, waActive: false },
   });
 
   revalidatePath("/settings");

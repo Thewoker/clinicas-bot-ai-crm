@@ -1,10 +1,11 @@
 /**
- * Audio transcription via Groq Whisper (free tier).
+ * Audio transcription via Groq Whisper.
  *
  * Env vars required:
- *   GROQ_API_KEY       — Groq API key (console.groq.com)
- *   TWILIO_ACCOUNT_SID — used to authenticate the media download
- *   TWILIO_AUTH_TOKEN  — used to authenticate the media download
+ *   GROQ_API_KEY — Groq API key (console.groq.com)
+ *
+ * transcribeAudioBuffer — for Baileys WhatsApp audio (buffer already downloaded)
+ * transcribeWhatsAppAudio — for Twilio voice recordings (URL with Basic auth)
  */
 
 import Groq from "groq-sdk";
@@ -25,9 +26,35 @@ function getExt(contentType: string): string {
   return CONTENT_TYPE_TO_EXT[base] ?? "ogg";
 }
 
+function getGroq(): Groq {
+  const apiKey = process.env.GROQ_API_KEY ?? "";
+  if (!apiKey) throw new Error("GROQ_API_KEY is not set");
+  return new Groq({ apiKey });
+}
+
+/** Transcribe an audio Buffer (used by Baileys WhatsApp audio). */
+export async function transcribeAudioBuffer(
+  buffer: Buffer,
+  contentType: string
+): Promise<string> {
+  const ext = getExt(contentType);
+  const groq = getGroq();
+  const transcription = await groq.audio.transcriptions.create({
+    file: new File([new Uint8Array(buffer)], `audio.${ext}`, { type: contentType }),
+    model: "whisper-large-v3-turbo",
+    language: "es",
+    response_format: "text",
+  });
+  return (transcription as unknown as string).trim();
+}
+
 /**
- * Downloads a Twilio media file and transcribes it with Groq Whisper.
- * Returns the transcribed text in Spanish.
+ * Downloads a Twilio media URL and transcribes it.
+ * Used by the voice webhook (Twilio recordings require Basic auth).
+ *
+ * Env vars required additionally:
+ *   TWILIO_ACCOUNT_SID
+ *   TWILIO_AUTH_TOKEN
  */
 export async function transcribeWhatsAppAudio(
   mediaUrl: string,
@@ -35,31 +62,20 @@ export async function transcribeWhatsAppAudio(
 ): Promise<string> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID ?? "";
   const authToken = process.env.TWILIO_AUTH_TOKEN ?? "";
-  const apiKey = process.env.GROQ_API_KEY ?? "";
 
-  if (!apiKey) throw new Error("GROQ_API_KEY is not set");
-
-  // Twilio media URLs require HTTP Basic auth
-  const basicAuth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  const basicAuth = Buffer.from(`${accountSid}:${authToken}`).toString(
+    "base64"
+  );
   const response = await fetch(mediaUrl, {
     headers: { Authorization: `Basic ${basicAuth}` },
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to download audio from Twilio: HTTP ${response.status}`);
+    throw new Error(
+      `Failed to download audio from Twilio: HTTP ${response.status}`
+    );
   }
 
   const audioBuffer = await response.arrayBuffer();
-  const ext = getExt(contentType);
-
-  const groq = new Groq({ apiKey });
-
-  const transcription = await groq.audio.transcriptions.create({
-    file: new File([audioBuffer], `audio.${ext}`, { type: contentType }),
-    model: "whisper-large-v3-turbo",
-    language: "es",
-    response_format: "text",
-  });
-
-  return (transcription as unknown as string).trim();
+  return transcribeAudioBuffer(Buffer.from(audioBuffer), contentType);
 }

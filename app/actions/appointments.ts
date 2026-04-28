@@ -134,7 +134,7 @@ export async function updateAppointment(
         if (!clinic?.waActive || !clinic.waPhoneNumberId) {
           notifyFailed = "WhatsApp no está configurado en la clínica";
         } else {
-          const { sendWhatsAppMessage } = await import("@/lib/twilio");
+          const { whatsappManager } = await import("@/lib/whatsapp/manager");
           const { format } = await import("date-fns");
           const { es } = await import("date-fns/locale");
 
@@ -149,8 +149,8 @@ export async function updateAppointment(
               ? `Hola ${existing.patient.name} 👋 Tu turno con ${existing.doctor.name} del ${dateStr} fue cancelado por la clínica. Si querés reprogramarlo, escribinos y te buscamos un nuevo horario.`
               : `Hola ${existing.patient.name} 👋 Tu turno fue modificado:\n\n📅 ${dateStr}\n👨‍⚕️ ${existing.doctor.name}\n\n¿Confirmás el nuevo horario? Respondé "Sí" o escribinos si necesitás otro día.`;
 
-          await sendWhatsAppMessage(
-            clinic.waPhoneNumberId,
+          await whatsappManager.sendMessage(
+            session.clinicId,
             existing.patient.phone,
             msg
           );
@@ -211,12 +211,12 @@ export async function cancelAppointment(
         if (!clinic?.waActive || !clinic.waPhoneNumberId) {
           notifyFailed = "WhatsApp no está configurado en la clínica";
         } else {
-          const { sendWhatsAppMessage } = await import("@/lib/twilio");
+          const { whatsappManager } = await import("@/lib/whatsapp/manager");
           const { format } = await import("date-fns");
           const { es } = await import("date-fns/locale");
           const dateStr = format(existing.startTime, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
-          await sendWhatsAppMessage(
-            clinic.waPhoneNumberId,
+          await whatsappManager.sendMessage(
+            session.clinicId,
             existing.patient.phone,
             `Hola ${existing.patient.name} 👋 Tu turno con ${existing.doctor.name} del ${dateStr} fue cancelado por la clínica. Si querés reprogramarlo, escribinos y te buscamos un nuevo horario.`
           );

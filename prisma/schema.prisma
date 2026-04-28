@@ -21,8 +21,8 @@ model Clinic {
 
   timezone        String   @default("Europe/Madrid")
 
-  // WhatsApp Bot (via Twilio)
-  waPhoneNumberId String?  // Twilio number in E.164, e.g. "+14155238886"
+  // WhatsApp Bot (via Baileys)
+  waPhoneNumberId String?  // Clinic's WA number in E.164 (set automatically after QR scan)
   waBotName       String?
   waBotWelcome    String?
   waActive        Boolean @default(false)
