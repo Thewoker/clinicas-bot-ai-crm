@@ -16,6 +16,14 @@ import { transcribeAudioBuffer } from "@/lib/transcription";
 
 const SESSIONS_DIR = path.join(process.cwd(), "whatsapp-sessions");
 
+// Disconnect codes that mean the session is permanently broken.
+// On these, delete session files instead of reconnecting blindly.
+const BAD_SESSION_CODES = new Set([
+  405, // Registration rejected / protocol mismatch
+  403, // Forbidden
+  500, // BadSession (Baileys' own constant)
+]);
+
 const silentLogger = {
   level: "silent",
   info: () => {},
@@ -31,6 +39,16 @@ interface ClinicConnection {
   sock: any;
   qr?: string;
   connected: boolean;
+  /** Pending reconnect timer — cancelled when disconnectClinic() is called. */
+  reconnectTimer?: ReturnType<typeof setTimeout>;
+  /** Set to false by disconnectClinic() to prevent any further reconnects. */
+  shouldReconnect: boolean;
+}
+
+/** Delete all session files for a clinic. */
+async function clearSession(clinicId: string): Promise<void> {
+  const dir = path.join(SESSIONS_DIR, clinicId);
+  await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
 }
 
 class WhatsAppManager {
@@ -55,19 +73,18 @@ class WhatsAppManager {
 
   /** Create (or restart) the Baileys socket for a clinic. */
   async connectClinic(clinicId: string): Promise<void> {
-    // Close existing connection cleanly
+    // Cancel any pending reconnect and close the existing socket cleanly
     const existing = this.connections.get(clinicId);
     if (existing) {
-      try {
-        existing.sock.ws?.close();
-      } catch {}
+      existing.shouldReconnect = false;
+      if (existing.reconnectTimer) clearTimeout(existing.reconnectTimer);
+      try { existing.sock.ws?.close(); } catch {}
       this.connections.delete(clinicId);
     }
 
     const sessionDir = path.join(SESSIONS_DIR, clinicId);
     await fs.mkdir(sessionDir, { recursive: true });
 
-    // Dynamic import to work with Baileys ESM and Next.js bundler
     const {
       default: makeWASocket,
       useMultiFileAuthState,
@@ -77,20 +94,23 @@ class WhatsAppManager {
     } = await import("@whiskeysockets/baileys");
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-
-    // Fetch the current WA Web version to avoid protocol mismatches
     const { version } = await fetchLatestBaileysVersion();
-    console.log(`[wa] Creating socket for clinic ${clinicId} (WA version: ${version.join(".")})...`);
+
+    console.log(`[wa] Connecting clinic ${clinicId} (WA ${version.join(".")})`);
 
     const sock = makeWASocket({
       version,
       auth: state,
       printQRInTerminal: false,
       logger: silentLogger as never,
-      connectTimeoutMs: 20_000,
+      connectTimeoutMs: 30_000,
     });
 
-    const entry: ClinicConnection = { sock, connected: false };
+    const entry: ClinicConnection = {
+      sock,
+      connected: false,
+      shouldReconnect: true,
+    };
     this.connections.set(clinicId, entry);
 
     sock.ev.on("creds.update", saveCreds);
@@ -105,7 +125,6 @@ class WhatsAppManager {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          console.log(`[wa] QR received for clinic ${clinicId}`);
           entry.qr = qr;
         }
 
@@ -130,26 +149,26 @@ class WhatsAppManager {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
           const loggedOut = statusCode === DisconnectReason.loggedOut;
+          const badSession = BAD_SESSION_CODES.has(statusCode);
 
-          if (loggedOut) {
-            console.log(`[wa] Clinic ${clinicId} logged out`);
+          console.log(`[wa] Clinic ${clinicId} closed (code ${statusCode})`);
+
+          if (loggedOut || badSession) {
+            // Permanent failure — wipe session so the next connect starts fresh
+            console.log(`[wa] Clearing session for clinic ${clinicId} (code ${statusCode})`);
             this.connections.delete(clinicId);
-            await fs
-              .rm(sessionDir, { recursive: true, force: true })
-              .catch(() => {});
+            await clearSession(clinicId);
             await prisma.clinic
               .update({
                 where: { id: clinicId },
                 data: { waPhoneNumberId: null, waActive: false },
               })
               .catch(console.error);
-          } else {
-            console.log(
-              `[wa] Clinic ${clinicId} disconnected (code ${statusCode}), reconnecting in 5s...`
-            );
-            setTimeout(
+          } else if (entry.shouldReconnect) {
+            // Transient failure — reconnect after a short delay
+            entry.reconnectTimer = setTimeout(
               () => this.connectClinic(clinicId).catch(console.error),
-              5000
+              8_000
             );
           }
         }
@@ -158,30 +177,16 @@ class WhatsAppManager {
 
     sock.ev.on(
       "messages.upsert",
-      async ({
-        messages,
-        type,
-      }: {
-        messages: unknown[];
-        type: string;
-      }) => {
+      async ({ messages, type }: { messages: unknown[]; type: string }) => {
         if (type !== "notify") return;
         for (const msg of messages) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const m = msg as any;
           if (m.key?.fromMe || !m.key?.remoteJid) continue;
-          if (m.key.remoteJid.endsWith("@g.us")) continue; // skip groups
-          await this.handleIncoming(
-            clinicId,
-            sock,
-            m,
-            downloadMediaMessage
-          ).catch((err) => {
-            console.error(
-              `[wa] Error handling message for clinic ${clinicId}:`,
-              err
-            );
-          });
+          if (m.key.remoteJid.endsWith("@g.us")) continue;
+          await this.handleIncoming(clinicId, sock, m, downloadMediaMessage).catch(
+            (err) => console.error(`[wa] Message error for clinic ${clinicId}:`, err)
+          );
         }
       }
     );
@@ -230,17 +235,9 @@ class WhatsAppManager {
 
     if (isAudio) {
       try {
-        const buffer = (await downloadMediaMessage(
-          msg,
-          "buffer",
-          {}
-        )) as Buffer;
-        const contentType: string =
-          content.audioMessage?.mimetype ?? "audio/ogg";
+        const buffer = (await downloadMediaMessage(msg, "buffer", {})) as Buffer;
+        const contentType: string = content.audioMessage?.mimetype ?? "audio/ogg";
         messageText = await transcribeAudioBuffer(buffer, contentType);
-        console.log(
-          `[wa] Transcribed audio from ${patientPhone}: "${messageText}"`
-        );
       } catch (err) {
         console.error(`[wa] Audio transcription failed:`, err);
         await sock
@@ -254,7 +251,6 @@ class WhatsAppManager {
 
     if (!messageText.trim()) return;
 
-    // Load / create / reset stale conversation
     let conversation = await prisma.whatsappConversation.findUnique({
       where: { clinicId_patientPhone: { clinicId, patientPhone } },
     });
@@ -319,29 +315,24 @@ class WhatsAppManager {
     return !!c && !c.connected;
   }
 
-  /** Send a text message from the clinic's socket (used for manual replies). */
-  async sendMessage(
-    clinicId: string,
-    toPhone: string,
-    text: string
-  ): Promise<void> {
+  async sendMessage(clinicId: string, toPhone: string, text: string): Promise<void> {
     const entry = this.connections.get(clinicId);
     if (!entry?.connected) throw new Error("WhatsApp no está conectado");
     const jid = toPhone.replace("+", "") + "@s.whatsapp.net";
     await entry.sock.sendMessage(jid, { text });
   }
 
-  /** Logout and delete the session for a clinic. */
+  /** Logout, cancel reconnects, and delete session files for a clinic. */
   async disconnectClinic(clinicId: string): Promise<void> {
     const entry = this.connections.get(clinicId);
     if (entry) {
-      try {
-        await entry.sock.logout();
-      } catch {}
+      // Prevent any scheduled reconnect from firing after we return
+      entry.shouldReconnect = false;
+      if (entry.reconnectTimer) clearTimeout(entry.reconnectTimer);
+      try { await entry.sock.logout(); } catch {}
       this.connections.delete(clinicId);
     }
-    const sessionDir = path.join(SESSIONS_DIR, clinicId);
-    await fs.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
+    await clearSession(clinicId);
   }
 }
 
