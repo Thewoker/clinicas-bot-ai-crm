@@ -16,12 +16,11 @@ import { transcribeAudioBuffer } from "@/lib/transcription";
 
 const SESSIONS_DIR = path.join(process.cwd(), "whatsapp-sessions");
 
-// Info-level logger to see what Baileys does internally
 const silentLogger = {
-  level: "info",
-  info: (...a: unknown[]) => console.log("[baileys:info]", ...a),
+  level: "silent",
+  info: () => {},
   debug: () => {},
-  warn: (...a: unknown[]) => console.warn("[baileys:warn]", ...a),
+  warn: () => {},
   error: (...a: unknown[]) => console.error("[baileys:error]", ...a),
   trace: () => {},
   child: function () { return silentLogger; },
@@ -93,7 +92,6 @@ class WhatsAppManager {
 
     const entry: ClinicConnection = { sock, connected: false };
     this.connections.set(clinicId, entry);
-    console.log(`[wa] Socket created, waiting for connection events...`);
 
     sock.ev.on("creds.update", saveCreds);
 
@@ -110,8 +108,6 @@ class WhatsAppManager {
           console.log(`[wa] QR received for clinic ${clinicId}`);
           entry.qr = qr;
         }
-
-        console.log(`[wa] connection.update for ${clinicId}:`, { connection, hasQR: !!qr });
 
         if (connection === "open") {
           entry.connected = true;
