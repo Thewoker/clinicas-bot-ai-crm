@@ -167,7 +167,7 @@ export function ConversationsView() {
             </p>
           </div>
           <button
-            onClick={fetchConversations}
+            onClick={() => fetchConversations()}
             disabled={loadingList}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
           >
