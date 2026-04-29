@@ -31,15 +31,18 @@ export function KnowledgeBaseClient({
 
   function handleCreate(formData: FormData) {
     startTransition(async () => {
-      await createFaq(formData);
+      const created = await createFaq(formData);
+      setFaqs((prev) => [...prev, { ...created, category: created.category ?? "" }]);
       setShowForm(false);
-      // optimistic: reload happens via revalidatePath
     });
   }
 
   function handleUpdate(formData: FormData) {
     startTransition(async () => {
-      await updateFaq(formData);
+      const updated = await updateFaq(formData);
+      setFaqs((prev) =>
+        prev.map((f) => (f.id === updated.id ? { ...updated, category: updated.category ?? "" } : f))
+      );
       setEditing(null);
     });
   }

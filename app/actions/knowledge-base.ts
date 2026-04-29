@@ -13,7 +13,7 @@ export async function createFaq(formData: FormData) {
     throw new Error("Datos incompletos");
   }
 
-  await prisma.knowledgeBase.create({
+  const created = await prisma.knowledgeBase.create({
     data: {
       clinicId,
       question: question.trim(),
@@ -23,6 +23,7 @@ export async function createFaq(formData: FormData) {
   });
 
   revalidatePath("/knowledge-base");
+  return created;
 }
 
 export async function updateFaq(formData: FormData) {
@@ -31,7 +32,7 @@ export async function updateFaq(formData: FormData) {
   const answer = formData.get("answer") as string;
   const category = (formData.get("category") as string) || null;
 
-  await prisma.knowledgeBase.update({
+  const updated = await prisma.knowledgeBase.update({
     where: { id },
     data: {
       question: question.trim(),
@@ -41,6 +42,7 @@ export async function updateFaq(formData: FormData) {
   });
 
   revalidatePath("/knowledge-base");
+  return updated;
 }
 
 export async function deleteFaq(id: string) {

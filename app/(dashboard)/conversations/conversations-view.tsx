@@ -57,17 +57,44 @@ export function ConversationsView() {
   const [sendError, setSendError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const sendingRef = useRef(false);
 
-  const fetchConversations = useCallback(async () => {
-    setLoadingList(true);
+  useEffect(() => { sendingRef.current = sending; }, [sending]);
+
+  const fetchConversations = useCallback(async (silent = false) => {
+    if (!silent) setLoadingList(true);
     const res = await fetch("/api/conversations");
     if (res.ok) setConversations(await res.json());
-    setLoadingList(false);
+    if (!silent) setLoadingList(false);
   }, []);
 
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
+
+  // Poll conversation list every 15s silently, only when tab is visible
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") fetchConversations(true);
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [fetchConversations]);
+
+  // Poll active conversation messages every 5s, only when tab is visible and not sending
+  useEffect(() => {
+    if (!selectedId) return;
+    const id = setInterval(async () => {
+      if (document.visibilityState !== "visible" || sendingRef.current) return;
+      const res = await fetch(`/api/conversations/${selectedId}`);
+      if (!res.ok) return;
+      const data: ConversationDetail = await res.json();
+      setDetail((prev) => {
+        if (!prev || data.messages.length !== prev.messages.length) return data;
+        return prev;
+      });
+    }, 5_000);
+    return () => clearInterval(id);
+  }, [selectedId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

@@ -18,7 +18,8 @@
       "Bash(npm view *)",
       "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const v=JSON.parse\\(d\\); const six=v.filter\\(x=>x.startsWith\\('6'\\)\\); console.log\\('v6.x:', six.slice\\(-5\\).join\\(', '\\)\\); console.log\\('latest:', v[v.length-1]\\);\")",
       "Bash(node -e \"const p = require\\('c:/Users/leone/Desktop/git/clinicas-cistina-mar/node_modules/@whiskeysockets/baileys/package.json'\\); console.log\\('version:', p.version\\)\")",
-      "Bash(node -e \"const b = require\\('c:/Users/leone/Desktop/git/clinicas-cistina-mar/node_modules/@whiskeysockets/baileys'\\); console.log\\('has makeWASocket:', typeof b.makeWASocket\\); console.log\\('has fetchLatestBaileysVersion:', typeof b.fetchLatestBaileysVersion\\);\")"
+      "Bash(node -e \"const b = require\\('c:/Users/leone/Desktop/git/clinicas-cistina-mar/node_modules/@whiskeysockets/baileys'\\); console.log\\('has makeWASocket:', typeof b.makeWASocket\\); console.log\\('has fetchLatestBaileysVersion:', typeof b.fetchLatestBaileysVersion\\);\")",
+      "Bash(xargs ls *)"
     ]
   }
 }

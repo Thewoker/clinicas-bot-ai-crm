@@ -109,11 +109,18 @@ function CreateModal({
   onClose: () => void;
 }) {
   const [result, action, pending] = useActionState(createAppointment, null);
+  const [startTime, setStartTime] = useState(cs.startTime);
+  const [endTime, setEndTime] = useState(add30min(cs.startTime));
   useEscKey(onClose);
 
   useEffect(() => {
     if (result && "success" in result) setTimeout(onClose, 700);
   }, [result]);
+
+  function handleStartChange(val: string) {
+    setStartTime(val);
+    if (val >= endTime) setEndTime(add30min(val));
+  }
 
   return (
     <div
@@ -189,7 +196,8 @@ function CreateModal({
                 type="datetime-local"
                 name="startTime"
                 required
-                defaultValue={cs.startTime}
+                value={startTime}
+                onChange={(e) => handleStartChange(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>
@@ -201,7 +209,9 @@ function CreateModal({
                 type="datetime-local"
                 name="endTime"
                 required
-                defaultValue={add30min(cs.startTime)}
+                min={startTime}
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>
@@ -286,12 +296,19 @@ function EditModal({
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelWarning, setCancelWarning] = useState<string | null>(null);
   const [cancelPending, startCancelTransition] = useTransition();
+  const [startTime, setStartTime] = useState(toDatetimeLocal(apt.startTime, clinicTzOffsetMin));
+  const [endTime, setEndTime] = useState(toDatetimeLocal(apt.endTime, clinicTzOffsetMin));
   const router = useRouter();
   useEscKey(onClose);
 
   useEffect(() => {
     if (result && "success" in result && !result.notifyFailed) setTimeout(onClose, 700);
   }, [result]);
+
+  function handleStartChange(val: string) {
+    setStartTime(val);
+    if (val >= endTime) setEndTime(add30min(val));
+  }
 
   function handleCancel() {
     const fd = new FormData();
@@ -387,7 +404,8 @@ function EditModal({
                 type="datetime-local"
                 name="startTime"
                 required
-                defaultValue={toDatetimeLocal(apt.startTime, clinicTzOffsetMin)}
+                value={startTime}
+                onChange={(e) => handleStartChange(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>
@@ -399,7 +417,9 @@ function EditModal({
                 type="datetime-local"
                 name="endTime"
                 required
-                defaultValue={toDatetimeLocal(apt.endTime, clinicTzOffsetMin)}
+                min={startTime}
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>

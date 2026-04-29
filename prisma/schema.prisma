@@ -120,6 +120,10 @@ model Appointment {
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
+  reminder48SentAt DateTime?
+  reminder24SentAt DateTime?
+  reminder4SentAt  DateTime?
+
   clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
