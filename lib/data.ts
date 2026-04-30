@@ -18,9 +18,34 @@ export async function getDoctors(clinicId: string) {
   });
 }
 
-export async function getPatients(clinicId: string) {
+export async function getPatient(clinicId: string, patientId: string) {
+  return prisma.patient.findFirst({
+    where: { id: patientId, clinicId },
+  });
+}
+
+export async function getPatientNotes(clinicId: string, patientId: string) {
+  return prisma.patientNote.findMany({
+    where: { patientId, clinicId },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getPatients(clinicId: string, search?: string) {
+  const trimmed = search?.trim();
   return prisma.patient.findMany({
-    where: { clinicId },
+    where: {
+      clinicId,
+      ...(trimmed
+        ? {
+            OR: [
+              { name: { contains: trimmed, mode: "insensitive" } },
+              { phone: { contains: trimmed } },
+              { email: { contains: trimmed, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { name: "asc" },
   });
 }
