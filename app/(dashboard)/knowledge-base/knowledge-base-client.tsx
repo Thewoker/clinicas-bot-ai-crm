@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { createFaq, updateFaq, deleteFaq, toggleFaq } from "@/app/actions/knowledge-base";
 import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Bot, ToggleLeft, ToggleRight } from "lucide-react";
 import clsx from "clsx";
+import { ConfirmModal } from "@/components/confirm-modal";
 
 type Faq = {
   id: string;
@@ -25,6 +26,7 @@ export function KnowledgeBaseClient({
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Faq | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const categories = Array.from(new Set(faqs.map((f) => f.category).filter(Boolean)));
@@ -48,7 +50,6 @@ export function KnowledgeBaseClient({
   }
 
   function handleDelete(id: string) {
-    if (!confirm("¿Eliminar esta entrada de la base de conocimiento?")) return;
     startTransition(async () => {
       await deleteFaq(id);
       setFaqs((prev) => prev.filter((f) => f.id !== id));
@@ -63,6 +64,14 @@ export function KnowledgeBaseClient({
   }
 
   return (
+    <>
+    <ConfirmModal
+      open={deletingId !== null}
+      title="Eliminar entrada"
+      message="Esta acción no se puede deshacer. ¿Querés eliminar esta entrada de la base de conocimiento?"
+      onConfirm={() => { if (deletingId) handleDelete(deletingId); }}
+      onClose={() => setDeletingId(null)}
+    />
     <div className="space-y-4">
       {/* Header bar */}
       <div className="flex items-center justify-between">
@@ -169,7 +178,7 @@ export function KnowledgeBaseClient({
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(faq.id); }}
+                      onClick={(e) => { e.stopPropagation(); setDeletingId(faq.id); }}
                       className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -187,6 +196,7 @@ export function KnowledgeBaseClient({
         ))}
       </div>
     </div>
+    </>
   );
 }
 

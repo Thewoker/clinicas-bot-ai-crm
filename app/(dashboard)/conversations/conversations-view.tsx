@@ -33,7 +33,15 @@ interface ConversationDetail {
 }
 
 function formatPhone(phone: string): string {
-  return phone.startsWith("+") ? phone : `+${phone}`;
+  const digits = phone.replace(/^\+/, "");
+  // Argentine mobile: 549 + area(2-4 digits) + number → +54 9 XX XXXX-XXXX
+  if (digits.startsWith("549") && digits.length === 13) {
+    const area = digits.slice(3, 5);
+    const part1 = digits.slice(5, 9);
+    const part2 = digits.slice(9);
+    return `+54 9 ${area} ${part1}-${part2}`;
+  }
+  return `+${digits}`;
 }
 
 function extractText(content: string | RawBlock[]): string | null {
@@ -219,7 +227,7 @@ export function ConversationsView() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-400 truncate">
-                        {conv.patientName ? `+${conv.patientPhone} · ` : ""}
+                        {conv.patientName ? `${formatPhone(conv.patientPhone)} · ` : ""}
                         {conv.lastMessage ?? "Sin mensajes"}
                       </p>
                     </div>

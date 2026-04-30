@@ -6,7 +6,7 @@ import { es } from "date-fns/locale";
 import Link from "next/link";
 import { ArrowLeft, Phone, Mail, CalendarDays, FileText, User } from "lucide-react";
 import { NoteForm } from "./note-form";
-import { DeleteNoteButton } from "./delete-note-button";
+import { NoteItem } from "./note-item";
 
 export default async function PatientNotesPage({
   params,
@@ -100,22 +100,7 @@ export default async function PatientNotesPage({
         ) : (
           <div className="space-y-3">
             {notes.map((note) => (
-              <div
-                key={note.id}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 group"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                      {note.content}
-                    </p>
-                  </div>
-                  <DeleteNoteButton noteId={note.id} patientId={patient.id} />
-                </div>
-                <p className="text-xs text-gray-400 mt-3">
-                  {format(new Date(note.createdAt), "d 'de' MMMM yyyy, HH:mm", { locale: es })}
-                </p>
-              </div>
+              <NoteItem key={note.id} note={note} patientId={patient.id} />
             ))}
           </div>
         )}

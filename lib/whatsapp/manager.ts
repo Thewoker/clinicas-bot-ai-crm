@@ -219,7 +219,7 @@ class WhatsAppManager {
     if (!clinic?.waActive) return;
 
     const jid: string = msg.key.remoteJid;
-    const rawPhone = jid.replace("@s.whatsapp.net", "");
+    const rawPhone = jid.replace(/@(s\.whatsapp\.net|lid)$/, "");
     const patientPhone = rawPhone.startsWith("+") ? rawPhone : `+${rawPhone}`;
 
     const content = msg.message;

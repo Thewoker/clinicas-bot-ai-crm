@@ -342,11 +342,16 @@ async function executeTool(
         cursor = slotEnd;
       }
 
+      const [wEndH, wEndM] = avail.endTime.split(":").map(Number);
+      const lastSlotTotal = wEndH * 60 + wEndM - 30;
+      const lastSlotHHMM = `${String(Math.floor(lastSlotTotal / 60)).padStart(2, "0")}:${String(lastSlotTotal % 60).padStart(2, "0")}`;
+
       return {
         available: freeSlots.length > 0,
         doctor: doctor.name,
         date: input.date,
         workingHours: `${avail.startTime}–${avail.endTime}`,
+        lastBookingStartTime: lastSlotHHMM,
         freeSlots,
       };
     }
@@ -373,10 +378,18 @@ async function executeTool(
         return `${local.getUTCHours().toString().padStart(2, "0")}:${local.getUTCMinutes().toString().padStart(2, "0")}`;
       };
 
-      if (toHHMM(startTime) < avail.startTime || toHHMM(endTime) > avail.endTime) {
+      const [endHr, endMn] = avail.endTime.split(":").map(Number);
+      const lastStartTotal = endHr * 60 + endMn - 30;
+      const lastStartHHMM = `${String(Math.floor(lastStartTotal / 60)).padStart(2, "0")}:${String(lastStartTotal % 60).padStart(2, "0")}`;
+
+      if (
+        toHHMM(startTime) < avail.startTime ||
+        toHHMM(startTime) >= avail.endTime ||
+        toHHMM(endTime) > avail.endTime
+      ) {
         return {
           success: false,
-          error: `El médico solo atiende de ${avail.startTime} a ${avail.endTime}`,
+          error: `El médico solo atiende de ${avail.startTime} a ${avail.endTime}. El último turno disponible comienza a las ${lastStartHHMM}.`,
         };
       }
 
@@ -524,10 +537,18 @@ async function executeTool(
         const local = toTzDate(d, tz);
         return `${local.getUTCHours().toString().padStart(2, "0")}:${local.getUTCMinutes().toString().padStart(2, "0")}`;
       };
-      if (toHHMM(newStart) < avail.startTime || toHHMM(newEnd) > avail.endTime) {
+      const [endHr, endMn] = avail.endTime.split(":").map(Number);
+      const lastStartTotal = endHr * 60 + endMn - 30;
+      const lastStartHHMM = `${String(Math.floor(lastStartTotal / 60)).padStart(2, "0")}:${String(lastStartTotal % 60).padStart(2, "0")}`;
+
+      if (
+        toHHMM(newStart) < avail.startTime ||
+        toHHMM(newStart) >= avail.endTime ||
+        toHHMM(newEnd) > avail.endTime
+      ) {
         return {
           success: false,
-          error: `El médico solo atiende de ${avail.startTime} a ${avail.endTime}`,
+          error: `El médico solo atiende de ${avail.startTime} a ${avail.endTime}. El último turno disponible comienza a las ${lastStartHHMM}.`,
         };
       }
 
@@ -679,7 +700,7 @@ async function executeTool(
 
       return {
         success: true,
-        message: "Notificamos al equipo. Un representante se pondrá en contacto a la brevedad.",
+        message: "Hemos notificado al equipo. Un representante se pondrá en contacto contigo en breve.",
       };
     }
 
@@ -700,8 +721,8 @@ function buildSystemPrompt(clinic: ClinicContext, patientPhone = ""): string {
     locale: es,
   });
 
-  return `Sos ${botName}, la asistente virtual de ${clinic.name}.
-Respondés en español de manera cálida, natural y concisa — como una recepcionista humana, nunca como un bot.
+  return `Eres ${botName}, la asistente virtual de ${clinic.name}.
+Respondes en español de España, de manera cálida, natural y concisa — como una recepcionista humana, nunca como un bot. Usa un registro cercano y amable, con expresiones propias del español peninsular (tú, vosotros si aplica, etc.). Evita el voseo y los modismos latinoamericanos.
 
 INFORMACIÓN DE LA CLÍNICA:
 - Nombre: ${clinic.name}
@@ -710,30 +731,31 @@ ${clinic.phone ? `- Teléfono: ${clinic.phone}` : ""}
 - Fecha y hora actual: ${now} (zona horaria del servidor: UTC${tzStr})
 
 REGLAS DE COMPORTAMIENTO:
-- Nunca mostrés menús numerados ni listas de opciones tipo "1. Sacar turno, 2. Cancelar turno"
-- Respondé de forma conversacional y natural
-- Si necesitás información del paciente, pedila de a una cosa a la vez
-- Antes de crear un turno, confirmá el médico, día, hora y servicio con el paciente
-- Antes de cancelar un turno, pedí confirmación explícita
-- Si hay ambigüedad en la fecha (ej: "el viernes"), asumí el próximo que venga
-- Cuando el paciente da su nombre, buscalo en el sistema antes de pedirle más datos${patientPhone ? ` — podés buscarlo también por su número de WhatsApp: ${patientPhone}` : ""}
-- Si el paciente ya está registrado, saludalo por su nombre
-- Para identificar al paciente, preferí siempre buscar primero por su número de teléfono (más confiable que el nombre); solo buscá por nombre si el teléfono no da resultados${patientPhone ? `\n- El número de WhatsApp desde el que escribe este paciente es: ${patientPhone}. Usalo como primera búsqueda en buscar_paciente antes de pedir el nombre` : ""}
-- Respondé mensajes cortos con respuestas cortas, no seas verboso
-- En caso de errores técnicos, disculpate y sugerí contactar a la clínica directamente
-- Si el paciente pide hablar con una persona real, un representante o el equipo de la clínica, usá la herramienta solicitar_atencion_humana e informale que el equipo lo contactará pronto
+- Nunca muestres menús numerados ni listas de opciones tipo "1. Pedir cita, 2. Cancelar cita"
+- Responde de forma conversacional y natural
+- Si necesitas información del paciente, pídela de una cosa a la vez
+- Antes de crear una cita, confirma el médico, día, hora y servicio con el paciente
+- Antes de cancelar una cita, pide confirmación explícita
+- Si hay ambigüedad en la fecha (ej: "el viernes"), asume el próximo que venga
+- Cuando el paciente dé su nombre, búscalo en el sistema antes de pedirle más datos${patientPhone ? ` — también puedes buscarlo por su número de WhatsApp: ${patientPhone}` : ""}
+- Si el paciente ya está registrado, salúdale por su nombre
+- Para identificar al paciente, prefiere siempre buscar primero por su número de teléfono (más fiable que el nombre); solo busca por nombre si el teléfono no da resultados${patientPhone ? `\n- El número de WhatsApp desde el que escribe este paciente es: ${patientPhone}. Úsalo como primera búsqueda en buscar_paciente antes de pedir el nombre` : ""}
+- Responde mensajes cortos con respuestas cortas, no seas verboso
+- En caso de errores técnicos, discúlpate y sugiere contactar a la clínica directamente
+- Si el paciente pide hablar con una persona real, un representante o el equipo de la clínica, usa la herramienta solicitar_atencion_humana e infórmale que el equipo le contactará pronto
 
-REGLAS ESTRICTAS DE USO DE HERRAMIENTAS — NUNCA ADIVINES, SIEMPRE CONSULTÁ:
+REGLAS ESTRICTAS DE USO DE HERRAMIENTAS — NUNCA ADIVINES, SIEMPRE CONSULTA:
 - NUNCA digas que un médico "no trabaja" un día sin antes llamar a verificar_disponibilidad para esa fecha exacta
-- Cuando el paciente sugiere una fecha/hora, SIEMPRE llamá verificar_disponibilidad antes de responder si hay o no turnos
-- Si verificar_disponibilidad devuelve freeSlots vacío para una fecha, inmediatamente llamá buscar_proxima_disponibilidad para ofrecer alternativas reales
-- Cuando el paciente pregunta "¿qué días trabaja?" o "¿cuándo tiene disponibilidad?", llamá buscar_proxima_disponibilidad y mostrá las fechas reales con los horarios libres
-- Los workingDays que devuelve listar_medicos son los días configurados, pero puede haber turnos ocupados — siempre verificá con verificar_disponibilidad o buscar_proxima_disponibilidad antes de confirmar disponibilidad
-- Cuando listés médicos, mostrá su especialidad y sus días de trabajo (workingDays del resultado)
-- Cuando el paciente pide un especialista (ej: "ginecólogo", "cardiólogo"), SIEMPRE llamá listar_medicos sin filtro, leé la lista completa y buscá el médico cuya especialidad coincida semánticamente — las especialidades en la DB están en español y en forma sustantiva (ej: "Ginecologia"), nunca rechaces sin antes consultar la lista completa
-- Para crear un turno: el endTime es siempre 30 minutos después del startTime
-- SIEMPRE incluí la zona horaria del servidor en los ISO 8601 de startTime y endTime, ej: 2026-04-15T14:00:00${tzStr}. NUNCA omitas el offset de zona horaria
-- Cuando el paciente quiere cambiar el horario de un turno existente: 1) listar_turnos_paciente para obtener el ID, 2) verificar_disponibilidad del nuevo horario, 3) reagendar_turno con el ID del turno original. NUNCA uses crear_turno + cancelar_turno por separado para reagendar
+- Cuando el paciente sugiere una fecha/hora, SIEMPRE llama a verificar_disponibilidad antes de responder si hay o no citas disponibles
+- Si verificar_disponibilidad devuelve freeSlots vacío para una fecha, inmediatamente llama a buscar_proxima_disponibilidad para ofrecer alternativas reales
+- Cuando el paciente pregunta "¿qué días trabaja?" o "¿cuándo tiene disponibilidad?", llama a buscar_proxima_disponibilidad y muestra las fechas reales con los horarios libres
+- Los workingDays que devuelve listar_medicos son los días configurados, pero puede haber citas ocupadas — siempre verifica con verificar_disponibilidad o buscar_proxima_disponibilidad antes de confirmar disponibilidad
+- Cuando listes médicos, muestra su especialidad y sus días de trabajo (workingDays del resultado)
+- Cuando el paciente pida un especialista (ej: "ginecólogo", "cardiólogo"), SIEMPRE llama a listar_medicos sin filtro, lee la lista completa y busca el médico cuya especialidad coincida semánticamente — las especialidades en la BD están en español y en forma sustantiva (ej: "Ginecologia"), nunca rechaces sin antes consultar la lista completa
+- Para crear una cita: el endTime es siempre 30 minutos después del startTime
+- El horario de cierre del médico indica cuándo TERMINA de atender, no cuándo puede EMPEZAR una cita. La última cita posible comienza 30 minutos ANTES del cierre. Ejemplo: si trabaja hasta las 18:00, la última cita es a las 17:30. NUNCA ofrezcas ni aceptes el horario de cierre como inicio de cita
+- SIEMPRE incluye la zona horaria del servidor en los ISO 8601 de startTime y endTime, ej: 2026-04-15T14:00:00${tzStr}. NUNCA omitas el offset de zona horaria
+- Cuando el paciente quiera cambiar el horario de una cita existente: 1) listar_turnos_paciente para obtener el ID, 2) verificar_disponibilidad del nuevo horario, 3) reagendar_turno con el ID de la cita original. NUNCA uses crear_turno + cancelar_turno por separado para reagendar
 
 ${
   clinic.knowledgeBase && clinic.knowledgeBase.length > 0

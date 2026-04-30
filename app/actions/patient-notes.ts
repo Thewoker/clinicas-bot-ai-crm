@@ -31,6 +31,24 @@ export async function createPatientNote(
   return { success: "Nota registrada" };
 }
 
+export async function updatePatientNote(noteId: string, patientId: string, content: string): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session) return { error: "No autorizado" };
+
+  const trimmed = content?.trim();
+  if (!trimmed) return { error: "El contenido de la nota no puede estar vacío" };
+
+  const note = await prisma.patientNote.findFirst({
+    where: { id: noteId, clinicId: session.clinicId },
+  });
+  if (!note) return { error: "Nota no encontrada" };
+
+  await prisma.patientNote.update({ where: { id: noteId }, data: { content: trimmed } });
+
+  revalidatePath(`/patients/${patientId}`);
+  return { success: "Nota actualizada" };
+}
+
 export async function deletePatientNote(noteId: string, patientId: string): Promise<ActionResult> {
   const session = await getSession();
   if (!session) return { error: "No autorizado" };
