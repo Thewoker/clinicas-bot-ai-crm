@@ -43,6 +43,8 @@ interface ClinicConnection {
   reconnectTimer?: ReturnType<typeof setTimeout>;
   /** Set to false by disconnectClinic() to prevent any further reconnects. */
   shouldReconnect: boolean;
+  /** Maps @lid JIDs to their real phone JIDs (e.g. "140411@lid" → "549362@s.whatsapp.net") */
+  lidToPhone: Map<string, string>;
 }
 
 /** Delete all session files for a clinic. */
@@ -110,8 +112,15 @@ class WhatsAppManager {
       sock,
       connected: false,
       shouldReconnect: true,
+      lidToPhone: new Map(),
     };
     this.connections.set(clinicId, entry);
+
+    sock.ev.on("contacts.upsert", (contacts: { id: string; lid?: string }[]) => {
+      for (const c of contacts) {
+        if (c.lid && c.id) entry.lidToPhone.set(c.lid, c.id);
+      }
+    });
 
     sock.ev.on("creds.update", saveCreds);
 
@@ -201,6 +210,7 @@ class WhatsAppManager {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     downloadMediaMessage: any
   ): Promise<void> {
+    console.error("[wa] handleIncoming START", msg?.key?.remoteJid);
     const clinic = await prisma.clinic.findUnique({
       where: { id: clinicId },
       select: {
@@ -219,7 +229,9 @@ class WhatsAppManager {
     if (!clinic?.waActive) return;
 
     const jid: string = msg.key.remoteJid;
-    const rawPhone = jid.replace(/@(s\.whatsapp\.net|lid)$/, "");
+    const entry = this.connections.get(clinicId);
+    const resolvedJid = jid.endsWith("@lid") ? (entry?.lidToPhone.get(jid) ?? jid) : jid;
+    const rawPhone = resolvedJid.split("@")[0];
     const patientPhone = rawPhone.startsWith("+") ? rawPhone : `+${rawPhone}`;
 
     const content = msg.message;
@@ -261,8 +273,9 @@ class WhatsAppManager {
         24 * 60 * 60 * 1000;
 
     if (!conversation) {
+      const displayName: string | null = msg.pushName ?? null;
       conversation = await prisma.whatsappConversation.create({
-        data: { clinicId, patientPhone, messages: [] },
+        data: { clinicId, patientPhone, displayName, messages: [] },
       });
     } else if (isStale) {
       await prisma.whatsappConversation.update({

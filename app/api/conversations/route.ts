@@ -39,7 +39,7 @@ export async function GET() {
       return {
         id: c.id,
         patientPhone: c.patientPhone,
-        patientName: c.patient?.name ?? null,
+        patientName: c.patient?.name ?? c.displayName ?? null,
         lastMessage: lastTextMessage(messages),
         updatedAt: c.updatedAt,
         messageCount: messages.length,

@@ -27,6 +27,7 @@ interface Message {
 interface ConversationDetail {
   id: string;
   patientPhone: string;
+  displayName: string | null;
   messages: Message[];
   patient: { id: string; name: string } | null;
   updatedAt: string;
@@ -263,17 +264,19 @@ export function ConversationsView() {
             <div className="px-5 py-3 bg-white border-b border-gray-100 flex items-center gap-3 shrink-0">
               <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
                 <span className="text-xs font-bold text-emerald-700">
-                  {(detail.patient?.name ?? detail.patientPhone).charAt(0).toUpperCase()}
+                  {(detail.patient?.name ?? detail.displayName ?? detail.patientPhone).charAt(0).toUpperCase()}
                 </span>
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-900">
-                  {detail.patient?.name ?? `${formatPhone(detail.patientPhone)}`}
+                  {detail.patient?.name ?? detail.displayName ?? formatPhone(detail.patientPhone)}
                 </p>
-                <div className="flex items-center gap-1 text-xs text-gray-400">
-                  <Phone className="w-3 h-3" />
-                  {formatPhone(detail.patientPhone)}
-                </div>
+                {!detail.displayName && (
+                  <div className="flex items-center gap-1 text-xs text-gray-400">
+                    <Phone className="w-3 h-3" />
+                    {formatPhone(detail.patientPhone)}
+                  </div>
+                )}
               </div>
             </div>
 

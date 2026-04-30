@@ -178,6 +178,7 @@ model WhatsappConversation {
   id           String   @id @default(cuid())
   clinicId     String
   patientPhone String   // número del paciente (sin +, ej: 5491112345678)
+  displayName  String?  // pushName de WhatsApp, fallback cuando el teléfono es un LID
   patientId    String?  // asociado una vez identificado en el sistema
   messages     Json     @default("[]") // MessageParam[] de Anthropic
   createdAt    DateTime @default(now())
