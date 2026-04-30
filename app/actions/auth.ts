@@ -1,7 +1,14 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { signSession, setSessionCookie, clearSessionCookie } from "@/lib/auth";
+import {
+  signSession,
+  signPendingSession,
+  setSessionCookie,
+  setPendingCookie,
+  clearSessionCookie,
+  clearPendingCookie,
+} from "@/lib/auth";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 
@@ -9,7 +16,7 @@ function slugify(name: string): string {
   return name
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
@@ -56,25 +63,19 @@ export async function registerAction(
   const hashed = await bcrypt.hash(password, 12);
   const slug = await uniqueSlug(clinicName);
 
-  const clinic = await prisma.clinic.create({
-    data: {
-      name: clinicName,
-      slug,
-      phone,
-      address,
-      users: {
-        create: {
-          name: userName,
-          email,
-          password: hashed,
-          role: "ADMIN",
-        },
-      },
-    },
-    include: { users: true },
+  const { user, clinic } = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: { name: userName, email, password: hashed },
+    });
+    const clinic = await tx.clinic.create({
+      data: { name: clinicName, slug, phone, address },
+    });
+    await tx.userClinic.create({
+      data: { userId: user.id, clinicId: clinic.id, role: "ADMIN" },
+    });
+    return { user, clinic };
   });
 
-  const user = clinic.users[0];
   const token = await signSession({
     userId: user.id,
     clinicId: clinic.id,
@@ -82,7 +83,7 @@ export async function registerAction(
     clinicSlug: clinic.slug,
     userName: user.name,
     userEmail: user.email,
-    role: user.role,
+    role: "ADMIN",
   });
 
   await setSessionCookie(token);
@@ -102,33 +103,51 @@ export async function loginAction(
 
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { clinic: true },
+    include: {
+      clinics: {
+        include: { clinic: true },
+        orderBy: { clinic: { name: "asc" } },
+      },
+    },
   });
 
-  if (!user) {
-    return { error: "Credenciales incorrectas." };
-  }
+  if (!user) return { error: "Credenciales incorrectas." };
 
   const valid = await bcrypt.compare(password, user.password);
-  if (!valid) {
-    return { error: "Credenciales incorrectas." };
+  if (!valid) return { error: "Credenciales incorrectas." };
+
+  if (user.clinics.length === 0) {
+    return { error: "Tu cuenta no tiene acceso a ninguna clínica." };
   }
 
-  const token = await signSession({
+  // Single clinic → direct login
+  if (user.clinics.length === 1) {
+    const { clinic, role } = user.clinics[0];
+    const token = await signSession({
+      userId: user.id,
+      clinicId: clinic.id,
+      clinicName: clinic.name,
+      clinicSlug: clinic.slug,
+      userName: user.name,
+      userEmail: user.email,
+      role,
+    });
+    await setSessionCookie(token);
+    redirect("/dashboard");
+  }
+
+  // Multiple clinics → pending session, redirect to selector
+  const pending = await signPendingSession({
     userId: user.id,
-    clinicId: user.clinicId,
-    clinicName: user.clinic.name,
-    clinicSlug: user.clinic.slug,
     userName: user.name,
     userEmail: user.email,
-    role: user.role,
   });
-
-  await setSessionCookie(token);
-  redirect("/dashboard");
+  await setPendingCookie(pending);
+  redirect("/select-clinic");
 }
 
 export async function logoutAction() {
   await clearSessionCookie();
+  await clearPendingCookie();
   redirect("/login");
 }

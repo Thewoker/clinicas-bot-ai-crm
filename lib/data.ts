@@ -1,5 +1,14 @@
 import { prisma } from "./prisma";
 
+export async function getUserClinics(userId: string) {
+  const records = await prisma.userClinic.findMany({
+    where: { userId },
+    include: { clinic: { select: { id: true, name: true, slug: true } } },
+    orderBy: { clinic: { name: "asc" } },
+  });
+  return records.map((r) => ({ ...r.clinic, role: r.role }));
+}
+
 export async function getClinics() {
   return prisma.clinic.findMany({ orderBy: { name: "asc" } });
 }

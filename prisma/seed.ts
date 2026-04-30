@@ -27,15 +27,13 @@ async function main() {
       apiKey: "key_natura_demo_001",
       phone: "+34 91 234 56 78",
       address: "Calle Gran Vía 42, Madrid",
-      users: {
-        create: {
-          name: "Admin Natura",
-          email: "admin@natura.demo",
-          password: hashedPassword,
-          role: "ADMIN",
-        },
-      },
     },
+  });
+  const userNatura = await prisma.user.create({
+    data: { name: "Admin Natura", email: "admin@natura.demo", password: hashedPassword },
+  });
+  await prisma.userClinic.create({
+    data: { userId: userNatura.id, clinicId: clinicNatura.id, role: "ADMIN" },
   });
 
   // --- Clínica Vitalia ---
@@ -47,15 +45,13 @@ async function main() {
       apiKey: "key_vitalia_demo_002",
       phone: "+34 93 456 78 90",
       address: "Passeig de Gràcia 88, Barcelona",
-      users: {
-        create: {
-          name: "Admin Vitalia",
-          email: "admin@vitalia.demo",
-          password: hashedPassword,
-          role: "ADMIN",
-        },
-      },
     },
+  });
+  const userVitalia = await prisma.user.create({
+    data: { name: "Admin Vitalia", email: "admin@vitalia.demo", password: hashedPassword },
+  });
+  await prisma.userClinic.create({
+    data: { userId: userVitalia.id, clinicId: clinicVitalia.id, role: "ADMIN" },
   });
 
   // --- Doctors Natura ---

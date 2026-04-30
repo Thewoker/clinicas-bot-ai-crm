@@ -27,7 +27,7 @@ model Clinic {
   waBotWelcome    String?
   waActive        Boolean @default(false)
 
-  users                 User[]
+  userClinics           UserClinic[]
   doctors               Doctor[]
   patients              Patient[]
   appointments          Appointment[]
@@ -42,17 +42,28 @@ model Clinic {
 
 model User {
   id        String   @id @default(cuid())
-  clinicId  String
   name      String
   email     String   @unique
   password  String
-  role      UserRole @default(ADMIN)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  clinics UserClinic[]
 
   @@map("users")
+}
+
+model UserClinic {
+  id       String   @id @default(cuid())
+  userId   String
+  clinicId String
+  role     UserRole @default(ADMIN)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clinicId])
+  @@map("user_clinics")
 }
 
 model Doctor {
