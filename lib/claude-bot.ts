@@ -350,6 +350,7 @@ async function executeTool(
         available: freeSlots.length > 0,
         doctor: doctor.name,
         date: input.date,
+        dayName: format(toTzDate(dayStart, tz), "EEEE d 'de' MMMM", { locale: es }),
         workingHours: `${avail.startTime}–${avail.endTime}`,
         lastBookingStartTime: lastSlotHHMM,
         freeSlots,
@@ -745,6 +746,7 @@ REGLAS DE COMPORTAMIENTO:
 - Si el paciente pide hablar con una persona real, un representante o el equipo de la clínica, usa la herramienta solicitar_atencion_humana e infórmale que el equipo le contactará pronto
 
 REGLAS ESTRICTAS DE USO DE HERRAMIENTAS — NUNCA ADIVINES, SIEMPRE CONSULTA:
+- CRÍTICO: NUNCA calcules ni deduzcas el nombre del día de la semana a partir de una fecha — los modelos de lenguaje cometen errores en este cálculo. Usa SIEMPRE el campo "dayName" que devuelven las herramientas (buscar_proxima_disponibilidad y verificar_disponibilidad). Si una herramienta devuelve dayName: "lunes 4 de mayo", di exactamente "lunes 4 de mayo" al paciente, sin reinterpretarlo
 - NUNCA digas que un médico "no trabaja" un día sin antes llamar a verificar_disponibilidad para esa fecha exacta
 - Cuando el paciente sugiere una fecha/hora, SIEMPRE llama a verificar_disponibilidad antes de responder si hay o no citas disponibles
 - Si verificar_disponibilidad devuelve freeSlots vacío para una fecha, inmediatamente llama a buscar_proxima_disponibilidad para ofrecer alternativas reales
