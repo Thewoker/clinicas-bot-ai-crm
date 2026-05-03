@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendAppointmentInvite } from "@/lib/ical-email";
 
 function unauthorized(msg: string) {
   return NextResponse.json({ error: msg }, { status: 401 });
@@ -197,9 +198,20 @@ export async function POST(req: NextRequest) {
       status: "SCHEDULED",
     },
     include: {
-      doctor: { select: { id: true, name: true, specialty: true } },
-      patient: { select: { id: true, name: true, phone: true } },
+      doctor: { select: { id: true, name: true, specialty: true, email: true } },
+      patient: { select: { id: true, name: true, phone: true, email: true } },
     },
+  });
+
+  sendAppointmentInvite({
+    id: appointment.id,
+    service: String(service),
+    startTime,
+    endTime,
+    notes: notes ? String(notes) : null,
+    doctor: { name: appointment.doctor.name, email: appointment.doctor.email },
+    patient: { name: appointment.patient.name, email: appointment.patient.email },
+    clinic: { name: clinic.name, address: clinic.address, timezone: clinic.timezone },
   });
 
   return NextResponse.json(

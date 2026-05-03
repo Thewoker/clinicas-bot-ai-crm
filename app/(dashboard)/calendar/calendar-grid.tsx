@@ -478,6 +478,7 @@ function EditModal({
                 type="checkbox"
                 name="notifyPatient"
                 value="true"
+                defaultChecked
                 className="rounded accent-emerald-500"
               />
               <span className="text-xs text-gray-600">

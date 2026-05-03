@@ -424,7 +424,7 @@ function EditModal({
           </div>
           {canNotifyWhatsapp && (
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" name="notifyPatient" value="true" className="rounded accent-emerald-500" />
+              <input type="checkbox" name="notifyPatient" value="true" defaultChecked className="rounded accent-emerald-500" />
               <span className="text-xs text-gray-600">Notificar al paciente por WhatsApp</span>
             </label>
           )}

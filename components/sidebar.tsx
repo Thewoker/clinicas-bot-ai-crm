@@ -158,10 +158,10 @@ export function Sidebar({ currentClinic, clinics }: SidebarProps) {
             ¿Necesitas ayuda con {currentClinic.name}?
           </p>
           <a
-            href="mailto:soporte@clinica-natura.es"
+            href="mailto:hola@sayhellou.com"
             className="text-xs font-medium text-emerald-700 underline"
           >
-            soporte@clinica-natura.es
+            hola@sayhellou.com
           </a>
         </div>
         <Link
