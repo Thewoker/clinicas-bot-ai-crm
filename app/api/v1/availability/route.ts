@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   // Validate doctor belongs to this clinic
   const doctor = await prisma.doctor.findFirst({
     where: { id: doctorId, clinicId: clinic.id },
-    include: { availability: true },
+    include: { availability: true, breaks: true },
   });
   if (!doctor) return badRequest("Doctor not found in this clinic");
 
@@ -73,6 +73,11 @@ export async function GET(req: NextRequest) {
     select: { startTime: true, endTime: true },
   });
 
+  // Breaks applicable to this day of week
+  const breaks = doctor.breaks.filter(
+    (b) => b.dayOfWeek === null || b.dayOfWeek === dayOfWeek
+  );
+
   // Generate all slots in the availability window
   const [startH, startM] = avail.startTime.split(":").map(Number);
   const [endH, endM] = avail.endTime.split(":").map(Number);
@@ -93,10 +98,18 @@ export async function GET(req: NextRequest) {
         cursor < new Date(apt.endTime) && slotEnd > new Date(apt.startTime)
     );
 
+    // Check overlap with doctor breaks
+    const breakBusy = breaks.some((b) => {
+      const [bh, bm] = b.startTime.split(":").map(Number);
+      const breakStart = new Date(year, month - 1, day, bh, bm, 0);
+      const breakEnd = new Date(breakStart.getTime() + b.duration * 60 * 1000);
+      return cursor < breakEnd && slotEnd > breakStart;
+    });
+
     slots.push({
       startTime: cursor.toISOString(),
       endTime: slotEnd.toISOString(),
-      available: !busy,
+      available: !busy && !breakBusy,
     });
 
     cursor = slotEnd;

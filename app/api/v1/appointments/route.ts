@@ -147,6 +147,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Check doctor breaks
+  const breaks = await prisma.doctorBreak.findMany({
+    where: {
+      doctorId: String(doctorId),
+      OR: [{ dayOfWeek }, { dayOfWeek: null }],
+    },
+  });
+
+  const toMins = (hhmm: string) => {
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const aptStartMins = toMins(startHHMM);
+  const aptEndMins = toMins(endHHMM);
+
+  for (const b of breaks) {
+    const breakStartMins = toMins(b.startTime);
+    const breakEndMins = breakStartMins + b.duration;
+    if (aptStartMins < breakEndMins && aptEndMins > breakStartMins) {
+      return conflict(
+        `El médico tiene un descanso de ${b.duration} min a las ${b.startTime}. No se pueden agendar turnos en ese horario.`
+      );
+    }
+  }
+
   // Check for overlapping appointments for this doctor
   const overlap = await prisma.appointment.findFirst({
     where: {

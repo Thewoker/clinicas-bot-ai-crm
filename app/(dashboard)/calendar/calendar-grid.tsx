@@ -47,7 +47,7 @@ const STATUS_LABELS: Record<string, string> = {
   NO_SHOW: "No asistió",
 };
 
-const HOURS = Array.from({ length: 14 }, (_, i) => i + 7); // 07:00–20:00
+const HOURS = Array.from({ length: 16 }, (_, i) => i + 7); // 07:00–22:00
 const SLOT_HEIGHT = 64; // px per hour
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -603,12 +603,26 @@ export function CalendarGrid({
 }) {
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [creating, setCreating] = useState<CreateState | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const displayDateStr =
     searchParams.get("date") ?? format(parseISO(currentDate), "yyyy-MM-dd");
   const date = parseISO(displayDateStr);
+
+  const isToday = displayDateStr === currentDate.slice(0, 10);
+  const nowClinic = toClinicLocal(now, clinicTzOffsetMin);
+  const nowMinutes = nowClinic.getUTCHours() * 60 + nowClinic.getUTCMinutes();
+  const gridStartMinutes = HOURS[0] * 60;
+  const gridEndMinutes = (HOURS[HOURS.length - 1] + 1) * 60;
+  const showNowLine = isToday && nowMinutes >= gridStartMinutes && nowMinutes < gridEndMinutes;
+  const nowTop = ((nowMinutes - gridStartMinutes) / 60) * SLOT_HEIGHT;
 
   function navigate(delta: number) {
     const newDate = addDays(date, delta);
@@ -701,7 +715,7 @@ export function CalendarGrid({
             {/* Body */}
             <div className="flex">
               {/* Time column */}
-              <div className="w-14 shrink-0 border-r border-gray-50">
+              <div className="w-14 shrink-0 border-r border-gray-50 relative">
                 {HOURS.map((h) => (
                   <div
                     key={h}
@@ -713,6 +727,16 @@ export function CalendarGrid({
                     </span>
                   </div>
                 ))}
+                {showNowLine && (
+                  <div
+                    className="absolute right-0 left-0 z-20 pointer-events-none flex justify-end pr-1.5"
+                    style={{ top: nowTop - 8 }}
+                  >
+                    <span className="text-xs text-red-400 font-semibold tabular-nums bg-white px-0.5 rounded">
+                      {String(nowClinic.getUTCHours()).padStart(2, "0")}:{String(nowClinic.getUTCMinutes()).padStart(2, "0")}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Doctor columns */}
@@ -745,6 +769,17 @@ export function CalendarGrid({
                         }}
                       />
                     ))}
+
+                    {/* Current time line */}
+                    {showNowLine && (
+                      <div
+                        className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
+                        style={{ top: nowTop }}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-red-400 shrink-0 -ml-1" />
+                        <div className="flex-1 h-px bg-red-400" />
+                      </div>
+                    )}
 
                     {/* Appointments */}
                     {docApts.map((apt) => {

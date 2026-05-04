@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { sendAppointmentReminderEmail } from "@/lib/ical-email";
 
 const WINDOWS = [
   { hours: 48, field: "reminder48SentAt" as const },
@@ -27,9 +28,9 @@ async function sendReminders() {
         [field]: null,
       },
       include: {
-        patient: { select: { name: true, phone: true } },
+        patient: { select: { name: true, phone: true, email: true } },
         doctor:  { select: { name: true, phone: true } },
-        clinic:  { select: { id: true, waActive: true, waPhoneNumberId: true } },
+        clinic:  { select: { id: true, name: true, address: true, waActive: true, waPhoneNumberId: true } },
       },
     });
 
@@ -66,6 +67,24 @@ async function sendReminders() {
           );
         } catch (err) {
           console.error(`[reminders] Doctor notify failed (${apt.doctor.phone}):`, err);
+        }
+      }
+
+      // Email reminder if patient has email
+      if (apt.patient.email) {
+        try {
+          await sendAppointmentReminderEmail({
+            service: apt.service,
+            startTime: apt.startTime,
+            patientName: apt.patient.name,
+            patientEmail: apt.patient.email,
+            doctorName: apt.doctor.name,
+            clinicName: apt.clinic.name,
+            clinicAddress: apt.clinic.address,
+            hoursUntil: hours,
+          });
+        } catch (err) {
+          console.error(`[reminders] Email reminder failed (${apt.patient.email}):`, err);
         }
       }
 

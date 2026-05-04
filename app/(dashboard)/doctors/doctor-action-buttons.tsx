@@ -5,6 +5,7 @@ import { Plus, Pencil } from "lucide-react";
 import { DoctorModal } from "./doctor-modal";
 
 type Availability = { dayOfWeek: number; startTime: string; endTime: string };
+type Break = { id: string; dayOfWeek: number | null; startTime: string; duration: number };
 
 type Doctor = {
   id: string;
@@ -14,6 +15,7 @@ type Doctor = {
   phone: string | null;
   color: string;
   availability: Availability[];
+  breaks: Break[];
 };
 
 export function DoctorActionButtons({ doctor }: { doctor?: Doctor }) {

@@ -23,6 +23,7 @@ export async function getDoctors(clinicId: string) {
     orderBy: { name: "asc" },
     include: {
       availability: { orderBy: { dayOfWeek: "asc" } },
+      breaks: { orderBy: { startTime: "asc" } },
     },
   });
 }
@@ -77,6 +78,14 @@ export async function getAppointments(
   });
 }
 
+export async function getPatientAppointments(clinicId: string, patientId: string) {
+  return prisma.appointment.findMany({
+    where: { patientId, clinicId },
+    include: { doctor: { select: { name: true, color: true } } },
+    orderBy: { startTime: "desc" },
+  });
+}
+
 export async function getKnowledgeBase(clinicId: string) {
   return prisma.knowledgeBase.findMany({
     where: { clinicId },
@@ -102,7 +111,7 @@ export async function getDashboardStats(clinicId: string) {
       where: { clinicId, startTime: { gte: startOfMonth, lte: endOfMonth } },
     }),
     prisma.appointment.count({
-      where: { clinicId, status: { in: ["CONFIRMED", "COMPLETED"] } },
+      where: { clinicId, startTime: { gte: startOfMonth, lte: endOfMonth }, status: { in: ["CONFIRMED", "COMPLETED"] } },
     }),
     prisma.patient.count({ where: { clinicId } }),
     prisma.doctor.count({ where: { clinicId } }),
@@ -110,7 +119,7 @@ export async function getDashboardStats(clinicId: string) {
       where: {
         clinicId,
         startTime: { gte: startOfMonth, lte: endOfMonth },
-        status: { in: ["CONFIRMED", "COMPLETED"] },
+        status: { notIn: ["CANCELLED", "NO_SHOW"] },
       },
       _sum: { price: true },
     }),

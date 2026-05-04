@@ -290,7 +290,7 @@ async function executeTool(
 
       const doctor = await prisma.doctor.findFirst({
         where: { id: input.doctorId, clinicId },
-        include: { availability: true },
+        include: { availability: true, breaks: true },
       });
       if (!doctor) return { available: false, reason: "Médico no encontrado" };
 
@@ -311,6 +311,10 @@ async function executeTool(
         select: { startTime: true, endTime: true },
       });
 
+      const dayBreaks = doctor.breaks.filter(
+        (b) => b.dayOfWeek === null || b.dayOfWeek === dayOfWeek
+      );
+
       const [startH, startM] = avail.startTime.split(":").map(Number);
       const [endH, endM] = avail.endTime.split(":").map(Number);
       // windowStart/End are UTC times corresponding to clinic-local working hours
@@ -329,7 +333,14 @@ async function executeTool(
             cursor < new Date(apt.endTime) && slotEnd > new Date(apt.startTime)
         );
 
-        if (!busy) {
+        const breakBusy = dayBreaks.some((b) => {
+          const [bh, bm] = b.startTime.split(":").map(Number);
+          const breakStart = new Date(dayStart.getTime() + (bh * 60 + bm) * 60000);
+          const breakEnd = new Date(breakStart.getTime() + b.duration * 60000);
+          return cursor < breakEnd && slotEnd > breakStart;
+        });
+
+        if (!busy && !breakBusy) {
           // Display time in clinic timezone
           const local = toTzDate(cursor, tz);
           freeSlots.push(
@@ -392,6 +403,28 @@ async function executeTool(
           success: false,
           error: `El médico solo atiende de ${avail.startTime} a ${avail.endTime}. El último turno disponible comienza a las ${lastStartHHMM}.`,
         };
+      }
+
+      // Check doctor breaks (compare in clinic-local HH:MM minutes)
+      const aptBreaks = await prisma.doctorBreak.findMany({
+        where: {
+          doctorId: input.doctorId,
+          OR: [{ dayOfWeek: startLocal.getUTCDay() }, { dayOfWeek: null }],
+        },
+      });
+      const aptEndLocal = toTzDate(endTime, tz);
+      const aptStartMins = startLocal.getUTCHours() * 60 + startLocal.getUTCMinutes();
+      const aptEndMins = aptEndLocal.getUTCHours() * 60 + aptEndLocal.getUTCMinutes();
+      for (const b of aptBreaks) {
+        const [bh, bm] = b.startTime.split(":").map(Number);
+        const breakStartMins = bh * 60 + bm;
+        const breakEndMins = breakStartMins + b.duration;
+        if (aptStartMins < breakEndMins && aptEndMins > breakStartMins) {
+          return {
+            success: false,
+            error: `El médico tiene un descanso de ${b.duration} minutos a las ${b.startTime}. Por favor elegí otro horario.`,
+          };
+        }
       }
 
       // Check overlap

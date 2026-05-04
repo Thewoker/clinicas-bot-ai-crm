@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
+const DURATION_OPTIONS = [15, 20, 30, 45, 60, 90, 120];
+
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 type ActionResult = { error: string } | { success: string };
@@ -133,4 +135,60 @@ export async function saveAvailability(
 
   revalidatePath("/doctors");
   return { success: "Horarios guardados correctamente" };
+}
+
+export async function saveBreaks(
+  _prev: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session) return { error: "No autorizado" };
+
+  const doctorId = formData.get("doctorId") as string;
+  if (!doctorId) return { error: "Médico no especificado" };
+
+  const doctor = await prisma.doctor.findFirst({
+    where: { id: doctorId, clinicId: session.clinicId },
+  });
+  if (!doctor) return { error: "Médico no encontrado" };
+
+  const count = parseInt((formData.get("breakCount") as string) || "0", 10);
+  const toSave: { dayOfWeek: number | null; startTime: string; duration: number }[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const dayRaw = formData.get(`break_day_${i}`) as string;
+    const startTime = (formData.get(`break_start_${i}`) as string)?.trim();
+    const durationRaw = formData.get(`break_duration_${i}`) as string;
+
+    if (!startTime || !durationRaw) continue;
+
+    const duration = parseInt(durationRaw, 10);
+    if (!DURATION_OPTIONS.includes(duration)) continue;
+
+    const dayOfWeek = dayRaw === "all" ? null : parseInt(dayRaw, 10);
+
+    toSave.push({
+      dayOfWeek: dayRaw === "all" ? null : (isNaN(dayOfWeek as number) ? null : (dayOfWeek as number)),
+      startTime,
+      duration,
+    });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.doctorBreak.deleteMany({ where: { doctorId } });
+    if (toSave.length > 0) {
+      await tx.doctorBreak.createMany({
+        data: toSave.map((b) => ({
+          doctorId,
+          clinicId: session.clinicId,
+          dayOfWeek: b.dayOfWeek,
+          startTime: b.startTime,
+          duration: b.duration,
+        })),
+      });
+    }
+  });
+
+  revalidatePath("/doctors");
+  return { success: "Descansos guardados correctamente" };
 }

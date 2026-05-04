@@ -33,6 +33,7 @@ model Clinic {
   appointments          Appointment[]
   knowledgeBase         KnowledgeBase[]
   doctorAvailability    DoctorAvailability[]
+  doctorBreaks          DoctorBreak[]
   whatsappConversations WhatsappConversation[]
   notifications         Notification[]
   patientNotes          PatientNote[]
@@ -81,6 +82,7 @@ model Doctor {
   clinic       Clinic               @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   appointments Appointment[]
   availability DoctorAvailability[]
+  breaks       DoctorBreak[]
 
   @@map("doctors")
 }
@@ -98,6 +100,20 @@ model DoctorAvailability {
 
   @@unique([doctorId, dayOfWeek])
   @@map("doctor_availability")
+}
+
+model DoctorBreak {
+  id        String  @id @default(cuid())
+  clinicId  String
+  doctorId  String
+  dayOfWeek Int?    // null = todos los días; 0=Dom … 6=Sáb
+  startTime String  // "HH:MM"
+  duration  Int     // duración del descanso en minutos
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("doctor_breaks")
 }
 
 model Patient {

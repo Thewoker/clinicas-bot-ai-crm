@@ -144,3 +144,42 @@ export function sendAppointmentCancellation(data: AppointmentEmailData) {
     console.error("[ical-email] cancellation failed:", err)
   );
 }
+
+export interface ReminderEmailData {
+  service: string;
+  startTime: Date;
+  patientName: string;
+  patientEmail: string;
+  doctorName: string;
+  clinicName: string;
+  clinicAddress?: string | null;
+  hoursUntil: number;
+}
+
+export async function sendAppointmentReminderEmail(data: ReminderEmailData): Promise<void> {
+  if (!process.env.RESEND_API_KEY) return;
+
+  const resendClient = new Resend(process.env.RESEND_API_KEY);
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+  const dateStr = format(data.startTime, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+  const label = data.hoursUntil === 4 ? "en 4 horas" : `en ${data.hoursUntil} horas`;
+
+  const html = `
+<p>Hola <strong>${data.patientName}</strong> 👋</p>
+<p>Te recordamos que tenés un turno <strong>${label}</strong>:</p>
+<ul>
+  <li>📅 <strong>${dateStr}</strong></li>
+  <li>👨‍⚕️ ${data.doctorName}</li>
+  <li>🏥 ${data.clinicName}</li>
+  ${data.clinicAddress ? `<li>📍 ${data.clinicAddress}</li>` : ""}
+  <li>🩺 Servicio: ${data.service}</li>
+</ul>
+<p>Si necesitás cancelar o reprogramar, comunicate con la clínica con tiempo.</p>`;
+
+  await resendClient.emails.send({
+    from: fromEmail,
+    to: data.patientEmail,
+    subject: `Recordatorio de turno ${label} — ${data.clinicName}`,
+    html,
+  });
+}

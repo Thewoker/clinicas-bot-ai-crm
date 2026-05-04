@@ -40,6 +40,27 @@ export async function createAppointment(
   });
   if (!doctor) return { error: "Médico no encontrado" };
 
+  // Check breaks
+  const dayOfWeek = startTime.getDay();
+  const toMins = (h: number, m: number) => h * 60 + m;
+  const aptStartMins = toMins(startTime.getHours(), startTime.getMinutes());
+  const aptEndMins = toMins(endTime.getHours(), endTime.getMinutes());
+
+  const breaks = await prisma.doctorBreak.findMany({
+    where: {
+      doctorId,
+      OR: [{ dayOfWeek }, { dayOfWeek: null }],
+    },
+  });
+  for (const b of breaks) {
+    const [bh, bm] = b.startTime.split(":").map(Number);
+    const breakStartMins = toMins(bh, bm);
+    const breakEndMins = breakStartMins + b.duration;
+    if (aptStartMins < breakEndMins && aptEndMins > breakStartMins) {
+      return { error: `El médico tiene un descanso de ${b.duration} min a las ${b.startTime}. No se pueden agendar turnos en ese horario.` };
+    }
+  }
+
   // Check overlap
   const overlap = await prisma.appointment.findFirst({
     where: {
@@ -124,6 +145,27 @@ export async function updateAppointment(
 
   // Overlap check (exclude this appointment)
   if (!["CANCELLED", "NO_SHOW"].includes(status)) {
+    // Break check
+    const dayOfWeek = startTime.getDay();
+    const toMins = (h: number, m: number) => h * 60 + m;
+    const aptStartMins = toMins(startTime.getHours(), startTime.getMinutes());
+    const aptEndMins = toMins(endTime.getHours(), endTime.getMinutes());
+
+    const breaks = await prisma.doctorBreak.findMany({
+      where: {
+        doctorId: existing.doctorId,
+        OR: [{ dayOfWeek }, { dayOfWeek: null }],
+      },
+    });
+    for (const b of breaks) {
+      const [bh, bm] = b.startTime.split(":").map(Number);
+      const breakStartMins = toMins(bh, bm);
+      const breakEndMins = breakStartMins + b.duration;
+      if (aptStartMins < breakEndMins && aptEndMins > breakStartMins) {
+        return { error: `El médico tiene un descanso de ${b.duration} min a las ${b.startTime}. No se pueden agendar turnos en ese horario.` };
+      }
+    }
+
     const overlap = await prisma.appointment.findFirst({
       where: {
         clinicId: session.clinicId,

@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
-import { getPatient, getPatientNotes } from "@/lib/data";
+import { getPatient, getPatientNotes, getPatientAppointments } from "@/lib/data";
+import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -7,6 +8,14 @@ import Link from "next/link";
 import { ArrowLeft, Phone, Mail, CalendarDays, FileText, User } from "lucide-react";
 import { NoteForm } from "./note-form";
 import { NoteItem } from "./note-item";
+import { AppointmentItem } from "./appointment-item";
+
+function clinicTzOffset(tz: string): number {
+  const at = new Date();
+  const utc = at.toLocaleString("en-US", { timeZone: "UTC" });
+  const local = at.toLocaleString("en-US", { timeZone: tz });
+  return (new Date(local).getTime() - new Date(utc).getTime()) / 60000;
+}
 
 export default async function PatientNotesPage({
   params,
@@ -17,10 +26,18 @@ export default async function PatientNotesPage({
   if (!session) redirect("/login");
 
   const { id } = await params;
-  const [patient, notes] = await Promise.all([
+  const [patient, notes, appointments, clinic] = await Promise.all([
     getPatient(session.clinicId, id),
     getPatientNotes(session.clinicId, id),
+    getPatientAppointments(session.clinicId, id),
+    prisma.clinic.findUnique({
+      where: { id: session.clinicId },
+      select: { waActive: true, waPhoneNumberId: true, timezone: true },
+    }),
   ]);
+
+  const canNotifyWhatsapp = !!(clinic?.waActive && clinic?.waPhoneNumberId);
+  const clinicTzOffsetMin = clinicTzOffset(clinic?.timezone ?? "America/Argentina/Buenos_Aires");
 
   if (!patient) notFound();
 
@@ -71,6 +88,39 @@ export default async function PatientNotesPage({
           <div className="mt-4 pt-4 border-t border-gray-50">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Nota general</p>
             <p className="text-sm text-gray-600 whitespace-pre-wrap">{patient.notes}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Appointments history section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-gray-400" />
+          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+            Historial de citas
+          </h2>
+          <span className="ml-auto text-xs text-gray-400">
+            {appointments.length} {appointments.length === 1 ? "cita" : "citas"}
+          </span>
+        </div>
+
+        {appointments.length === 0 ? (
+          <div className="text-center py-12 text-gray-400 text-sm bg-white rounded-2xl border border-gray-100">
+            <CalendarDays className="w-8 h-8 mx-auto mb-2 text-gray-200" />
+            No hay citas registradas para este paciente.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {appointments.map((appt) => (
+              <AppointmentItem
+                key={appt.id}
+                appointment={appt}
+                patientName={patient.name}
+                patientPhone={patient.phone}
+                canNotifyWhatsapp={canNotifyWhatsapp}
+                clinicTzOffsetMin={clinicTzOffsetMin}
+              />
+            ))}
           </div>
         )}
       </div>

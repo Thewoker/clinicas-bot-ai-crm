@@ -24,6 +24,32 @@ const BAD_SESSION_CODES = new Set([
   500, // BadSession (Baileys' own constant)
 ]);
 
+const INACTIVITY_MS = 10 * 60 * 1000;
+const INACTIVITY_PING = "¿Sigues ahí? Si necesitas algo más, estoy aquí para ayudarte.";
+
+const FAREWELL_WORDS = [
+  "hasta luego", "hasta pronto", "adiós", "adios", "chao", "bye",
+  "que tengas buen", "gracias por todo", "nada más", "ya es todo",
+];
+
+function looksLikeFarewell(messages: BotMessage[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant") continue;
+    const text = Array.isArray(m.content)
+      ? m.content
+          .filter(
+            (b): b is { type: "text"; text: string } =>
+              typeof b === "object" && b !== null && (b as { type: string }).type === "text"
+          )
+          .map((b) => b.text)
+          .join("")
+      : "";
+    return FAREWELL_WORDS.some((w) => text.toLowerCase().includes(w));
+  }
+  return false;
+}
+
 const silentLogger = {
   level: "silent",
   info: () => {},
@@ -45,6 +71,8 @@ interface ClinicConnection {
   shouldReconnect: boolean;
   /** Maps @lid JIDs to their real phone JIDs (e.g. "140411@lid" → "549362@s.whatsapp.net") */
   lidToPhone: Map<string, string>;
+  /** Per-patient inactivity timers. Key = patientPhone. */
+  inactivityTimers: Map<string, ReturnType<typeof setTimeout>>;
 }
 
 /** Delete all session files for a clinic. */
@@ -113,6 +141,7 @@ class WhatsAppManager {
       connected: false,
       shouldReconnect: true,
       lidToPhone: new Map(),
+      inactivityTimers: new Map(),
     };
     this.connections.set(clinicId, entry);
 
@@ -234,6 +263,15 @@ class WhatsAppManager {
     const rawPhone = resolvedJid.split("@")[0];
     const patientPhone = rawPhone.startsWith("+") ? rawPhone : `+${rawPhone}`;
 
+    // Cancel any pending inactivity timer — the patient just replied
+    if (entry) {
+      const existing = entry.inactivityTimers.get(patientPhone);
+      if (existing) {
+        clearTimeout(existing);
+        entry.inactivityTimers.delete(patientPhone);
+      }
+    }
+
     const content = msg.message;
     if (!content) return;
 
@@ -311,6 +349,32 @@ class WhatsAppManager {
     });
 
     await sock.sendMessage(jid, { text: reply });
+
+    // Schedule inactivity ping if the patient goes quiet for 10 minutes
+    const entryForTimer = this.connections.get(clinicId);
+    if (entryForTimer) {
+      const timer = setTimeout(async () => {
+        entryForTimer.inactivityTimers.delete(patientPhone);
+        const conv = await prisma.whatsappConversation
+          .findUnique({ where: { clinicId_patientPhone: { clinicId, patientPhone } } })
+          .catch(() => null);
+        if (!conv) return;
+        // If a new message arrived since we set the timer, skip
+        if (Date.now() - new Date(conv.updatedAt).getTime() < INACTIVITY_MS - 5_000) return;
+        const freshHistory = conv.messages as unknown as BotMessage[];
+        if (looksLikeFarewell(freshHistory)) return;
+        await sock.sendMessage(jid, { text: INACTIVITY_PING }).catch(() => {});
+        // Append the ping to history so Claude has context if the patient replies
+        const pingMsg: BotMessage = { role: "assistant", content: INACTIVITY_PING };
+        await prisma.whatsappConversation
+          .update({
+            where: { clinicId_patientPhone: { clinicId, patientPhone } },
+            data: { messages: [...freshHistory, pingMsg] as unknown as never[] },
+          })
+          .catch(() => {});
+      }, INACTIVITY_MS);
+      entryForTimer.inactivityTimers.set(patientPhone, timer);
+    }
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
@@ -339,9 +403,10 @@ class WhatsAppManager {
   async disconnectClinic(clinicId: string): Promise<void> {
     const entry = this.connections.get(clinicId);
     if (entry) {
-      // Prevent any scheduled reconnect from firing after we return
       entry.shouldReconnect = false;
       if (entry.reconnectTimer) clearTimeout(entry.reconnectTimer);
+      for (const t of entry.inactivityTimers.values()) clearTimeout(t);
+      entry.inactivityTimers.clear();
       try { await entry.sock.logout(); } catch {}
       this.connections.delete(clinicId);
     }
