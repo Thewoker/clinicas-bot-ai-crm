@@ -6,7 +6,8 @@ import { UserForm } from "./user-form";
 import { PasswordForm } from "./password-form";
 import { CopyButton } from "./copy-button";
 import { WhatsappForm } from "./whatsapp-form";
-import { Building2, User, Lock, MessageCircle } from "lucide-react";
+import { TelnyxForm } from "./telnyx-form";
+import { Building2, User, Lock, MessageCircle, Phone } from "lucide-react";
 
 export default async function SettingsPage() {
   const session = await getSession();
@@ -104,6 +105,27 @@ export default async function SettingsPage() {
             waBotName={clinic.waBotName}
             waBotWelcome={clinic.waBotWelcome}
             clinicName={clinic.name}
+          />
+        </div>
+      </section>
+
+      {/* Vapi Voice section */}
+      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-50">
+          <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
+            <Phone className="w-4 h-4 text-violet-600" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Llamadas de voz (Telnyx)</h2>
+            <p className="text-xs text-gray-400">
+              Bot de IA para atender llamadas telefónicas entrantes
+            </p>
+          </div>
+        </div>
+        <div className="px-6 py-5">
+          <TelnyxForm
+            telnyxApiKey={clinic.telnyxApiKey}
+            telnyxPhoneNumber={clinic.telnyxPhoneNumber}
           />
         </div>
       </section>

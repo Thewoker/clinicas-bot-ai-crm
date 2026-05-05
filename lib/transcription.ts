@@ -79,3 +79,26 @@ export async function transcribeWhatsAppAudio(
   const audioBuffer = await response.arrayBuffer();
   return transcribeAudioBuffer(Buffer.from(audioBuffer), contentType);
 }
+
+/**
+ * Downloads any media URL using a custom Authorization header and transcribes it.
+ * Used for Telnyx recordings (Bearer auth) and other providers.
+ */
+export async function transcribeUrlWithAuth(
+  mediaUrl: string,
+  contentType: string,
+  authHeader: string
+): Promise<string> {
+  const response = await fetch(mediaUrl, {
+    headers: { Authorization: authHeader },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to download audio: HTTP ${response.status} from ${mediaUrl}`
+    );
+  }
+
+  const audioBuffer = await response.arrayBuffer();
+  return transcribeAudioBuffer(Buffer.from(audioBuffer), contentType);
+}

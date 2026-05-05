@@ -27,6 +27,12 @@ model Clinic {
   waBotWelcome    String?
   waActive        Boolean @default(false)
 
+  // Telnyx Voice Calls
+  telnyxApiKey        String?  // Clinic's own Telnyx API key
+  telnyxPhoneNumberId String?  // Telnyx phone number resource ID
+  telnyxPhoneNumber   String?  // Actual phone number e.g. +34911234567
+  telnyxAppId         String?  // Telnyx TeXML application ID
+
   userClinics           UserClinic[]
   doctors               Doctor[]
   patients              Patient[]

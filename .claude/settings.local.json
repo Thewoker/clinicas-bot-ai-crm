@@ -21,7 +21,12 @@
       "Bash(node -e \"const b = require\\('c:/Users/leone/Desktop/git/clinicas-cistina-mar/node_modules/@whiskeysockets/baileys'\\); console.log\\('has makeWASocket:', typeof b.makeWASocket\\); console.log\\('has fetchLatestBaileysVersion:', typeof b.fetchLatestBaileysVersion\\);\")",
       "Bash(xargs ls *)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\" -Recurse -Directory -ErrorAction SilentlyContinue)",
-      "Bash(Select-Object -First 20)"
+      "Bash(Select-Object -First 20)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\" -Force | Format-Table Name, @{Name='Type'; Expression={if \\($_.PSIsContainer\\) {'DIR'} else {'FILE'}}} -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\" -Recurse -Directory | ForEach-Object { $_.FullName.Replace\\('c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar', ''\\) } | Sort-Object)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\\\(dashboard\\)\\\\settings\\\\\" -Recurse -Force | Select-Object FullName | Sort-Object FullName)",
+      "Bash(del \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\actions\\\\vapi.ts\")",
+      "Bash(del \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\\\(dashboard\\)\\\\settings\\\\vapi-form.tsx\")"
     ]
   }
 }
