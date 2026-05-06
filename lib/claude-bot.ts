@@ -99,8 +99,22 @@ const TOOLS: Anthropic.Tool[] = [
         name: { type: "string", description: "Nombre completo" },
         phone: { type: "string", description: "Número de teléfono con código de país" },
         email: { type: "string", description: "Email (opcional)" },
+        birthDate: { type: "string", description: "Fecha de nacimiento en formato YYYY-MM-DD (opcional, solo si el paciente la proporciona)" },
       },
       required: ["name", "phone"],
+    },
+  },
+  {
+    name: "actualizar_paciente",
+    description:
+      "Actualiza datos de un paciente ya existente. Usalo cuando el paciente proporcione información como su fecha de nacimiento durante la conversación y el paciente ya esté registrado.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        patientId: { type: "string", description: "ID del paciente a actualizar" },
+        birthDate: { type: "string", description: "Fecha de nacimiento en formato YYYY-MM-DD" },
+      },
+      required: ["patientId"],
     },
   },
   {
@@ -258,10 +272,22 @@ async function executeTool(
           name: input.name,
           phone: input.phone,
           email: input.email || null,
+          birthDate: input.birthDate ? new Date(input.birthDate) : null,
         },
         select: { id: true, name: true, phone: true },
       });
       return { success: true, patient };
+    }
+
+    case "actualizar_paciente": {
+      const updated = await prisma.patient.update({
+        where: { id: input.patientId },
+        data: {
+          ...(input.birthDate ? { birthDate: new Date(input.birthDate) } : {}),
+        },
+        select: { id: true, name: true, birthDate: true },
+      });
+      return { success: true, patient: updated };
     }
 
     case "listar_medicos": {
@@ -791,6 +817,7 @@ REGLAS ESTRICTAS DE USO DE HERRAMIENTAS — NUNCA ADIVINES, SIEMPRE CONSULTA:
 - El horario de cierre del médico indica cuándo TERMINA de atender, no cuándo puede EMPEZAR una cita. La última cita posible comienza 30 minutos ANTES del cierre. Ejemplo: si trabaja hasta las 18:00, la última cita es a las 17:30. NUNCA ofrezcas ni aceptes el horario de cierre como inicio de cita
 - SIEMPRE incluye la zona horaria del servidor en los ISO 8601 de startTime y endTime, ej: 2026-04-15T14:00:00${tzStr}. NUNCA omitas el offset de zona horaria
 - Cuando el paciente quiera cambiar el horario de una cita existente: 1) listar_turnos_paciente para obtener el ID, 2) verificar_disponibilidad del nuevo horario, 3) reagendar_turno con el ID de la cita original. NUNCA uses crear_turno + cancelar_turno por separado para reagendar
+- Si el paciente menciona su fecha de nacimiento en cualquier momento de la conversación (ej: "nací el 15 de marzo de 1990", "mi fecha de nacimiento es..."), conviértela al formato YYYY-MM-DD y: si el paciente aún no está registrado inclúyela en crear_paciente; si ya está registrado usa actualizar_paciente con su ID para guardarla. No solicites la fecha de nacimiento de forma proactiva, solo regístrala si el paciente la proporciona voluntariamente
 
 ${
   clinic.knowledgeBase && clinic.knowledgeBase.length > 0

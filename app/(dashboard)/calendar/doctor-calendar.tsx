@@ -920,10 +920,17 @@ export function DoctorCalendar({
           </select>
         </div>
 
+        {/* Appointment count — junto al selector para que no interfiera con las flechas */}
+        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: doctor.color }} />
+          {docApts.length} cita{docApts.length !== 1 ? "s" : ""}
+        </div>
+
         {/* Mode tabs */}
         <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
           {(["year", "month", "week", "day"] as Mode[]).map((m) => (
             <button
+              type="button"
               key={m}
               onClick={() => nav({ mode: m })}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
@@ -935,9 +942,10 @@ export function DoctorCalendar({
           ))}
         </div>
 
-        {/* Date navigation */}
+        {/* Date navigation — siempre último, ml-auto lo lleva al extremo derecho sin nada después */}
         <div className="flex items-center gap-2 ml-auto">
           <button
+            type="button"
             onClick={() => navigateDate(-1)}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
           >
@@ -947,17 +955,12 @@ export function DoctorCalendar({
             {dateLabel}
           </span>
           <button
+            type="button"
             onClick={() => navigateDate(1)}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Appointment count */}
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: doctor.color }} />
-          {docApts.length} cita{docApts.length !== 1 ? "s" : ""}
         </div>
       </div>
 

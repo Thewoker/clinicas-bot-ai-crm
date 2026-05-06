@@ -26,7 +26,11 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\" -Recurse -Directory | ForEach-Object { $_.FullName.Replace\\('c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar', ''\\) } | Sort-Object)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\\\(dashboard\\)\\\\settings\\\\\" -Recurse -Force | Select-Object FullName | Sort-Object FullName)",
       "Bash(del \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\actions\\\\vapi.ts\")",
-      "Bash(del \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\\\(dashboard\\)\\\\settings\\\\vapi-form.tsx\")"
+      "Bash(del \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\\\(dashboard\\)\\\\settings\\\\vapi-form.tsx\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\\\(dashboard\\)\\\\calendar\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(ls -la \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\\")",
+      "Read(//c/Users/leone/Desktop/git/**)"
     ]
   }
 }

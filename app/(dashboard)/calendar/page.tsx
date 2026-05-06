@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { CalendarGrid } from "./calendar-grid";
 import { DoctorCalendar } from "./doctor-calendar";
+import { Suspense } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
@@ -172,16 +173,18 @@ export default async function CalendarPage({
           clinicTzOffsetMin={tzOffsetMin}
         />
       ) : (
-        <DoctorCalendar
-          doctors={mappedDoctors}
-          appointments={mappedAppointments}
-          patients={mappedPatients}
-          canNotifyWhatsapp={canNotifyWhatsapp}
-          currentDate={displayDate.toISOString()}
-          clinicTzOffsetMin={tzOffsetMin}
-          initialMode={mode}
-          initialDoctorId={sp.doctorId ?? null}
-        />
+        <Suspense fallback={null}>
+          <DoctorCalendar
+            doctors={mappedDoctors}
+            appointments={mappedAppointments}
+            patients={mappedPatients}
+            canNotifyWhatsapp={canNotifyWhatsapp}
+            currentDate={displayDate.toISOString()}
+            clinicTzOffsetMin={tzOffsetMin}
+            initialMode={mode}
+            initialDoctorId={sp.doctorId ?? null}
+          />
+        </Suspense>
       )}
     </div>
   );
