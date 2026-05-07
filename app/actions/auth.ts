@@ -60,21 +60,41 @@ export async function registerAction(
     return { error: "Ya existe una cuenta con ese correo electrónico." };
   }
 
+  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL?.toLowerCase();
+  const isSuperAdmin = superAdminEmail === email;
+
   const hashed = await bcrypt.hash(password, 12);
   const slug = await uniqueSlug(clinicName);
 
   const { user, clinic } = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { name: userName, email, password: hashed },
+      data: {
+        name: userName,
+        email,
+        password: hashed,
+        superAdmin: isSuperAdmin,
+        status: isSuperAdmin ? "AUTHORIZED" : "PENDING",
+      },
     });
     const clinic = await tx.clinic.create({
-      data: { name: clinicName, slug, phone, address },
+      data: {
+        name: clinicName,
+        slug,
+        phone,
+        address,
+        authorized: isSuperAdmin,
+      },
     });
     await tx.userClinic.create({
       data: { userId: user.id, clinicId: clinic.id, role: "ADMIN" },
     });
     return { user, clinic };
   });
+
+  if (!isSuperAdmin) {
+    // Account pending authorization — don't create a session, show message
+    return { error: "Tu cuenta ha sido creada y está pendiente de autorización por un administrador." };
+  }
 
   const token = await signSession({
     userId: user.id,
@@ -84,10 +104,11 @@ export async function registerAction(
     userName: user.name,
     userEmail: user.email,
     role: "ADMIN",
+    superAdmin: true,
   });
 
   await setSessionCookie(token);
-  redirect("/dashboard");
+  redirect("/admin");
 }
 
 export async function loginAction(
@@ -116,6 +137,29 @@ export async function loginAction(
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return { error: "Credenciales incorrectas." };
 
+  if (user.status === "PENDING") {
+    return { error: "Tu cuenta está pendiente de autorización. Contacta al administrador." };
+  }
+  if (user.status === "SUSPENDED") {
+    return { error: "Tu cuenta ha sido suspendida. Contacta al administrador." };
+  }
+
+  // Super admin with no clinics → go straight to admin panel
+  if (user.superAdmin && user.clinics.length === 0) {
+    const token = await signSession({
+      userId: user.id,
+      clinicId: "",
+      clinicName: "",
+      clinicSlug: "",
+      userName: user.name,
+      userEmail: user.email,
+      role: "ADMIN",
+      superAdmin: true,
+    });
+    await setSessionCookie(token);
+    redirect("/admin");
+  }
+
   if (user.clinics.length === 0) {
     return { error: "Tu cuenta no tiene acceso a ninguna clínica." };
   }
@@ -131,8 +175,10 @@ export async function loginAction(
       userName: user.name,
       userEmail: user.email,
       role,
+      superAdmin: user.superAdmin,
     });
     await setSessionCookie(token);
+    if (user.superAdmin) redirect("/admin");
     redirect("/dashboard");
   }
 

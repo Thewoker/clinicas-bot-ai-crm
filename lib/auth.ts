@@ -19,6 +19,7 @@ export type SessionPayload = {
   userName: string;
   userEmail: string;
   role: string;
+  superAdmin: boolean;
 };
 
 // Pending session — authenticated but clinic not yet selected

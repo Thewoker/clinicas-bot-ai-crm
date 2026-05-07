@@ -17,6 +17,7 @@ import {
   Check,
   Building2,
   Plus,
+  ShieldCheck,
 } from "lucide-react";
 import clsx from "clsx";
 import { switchClinicAction } from "@/app/actions/clinic-select";
@@ -36,9 +37,10 @@ const navItems = [
 interface SidebarProps {
   currentClinic: { id: string; name: string; slug: string };
   clinics: Clinic[];
+  superAdmin?: boolean;
 }
 
-export function Sidebar({ currentClinic, clinics }: SidebarProps) {
+export function Sidebar({ currentClinic, clinics, superAdmin }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -176,6 +178,15 @@ export function Sidebar({ currentClinic, clinics }: SidebarProps) {
           <Settings className={clsx("w-4 h-4 shrink-0", pathname === "/settings" ? "text-emerald-600" : "")} />
           Configuración
         </Link>
+        {superAdmin && (
+          <Link
+            href="/admin"
+            className="w-full flex items-center gap-3 px-3 py-2 mt-1 rounded-lg transition-colors text-sm font-medium text-violet-500 hover:bg-violet-50 hover:text-violet-700"
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            Panel de Admin
+          </Link>
+        )}
       </div>
     </aside>
   );

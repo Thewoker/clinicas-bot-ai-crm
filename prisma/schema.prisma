@@ -16,6 +16,7 @@ model Clinic {
   apiKey       String   @unique @default(cuid())
   phone        String?
   address      String?
+  authorized   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -48,12 +49,14 @@ model Clinic {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String     @id @default(cuid())
+  name       String
+  email      String     @unique
+  password   String
+  status     UserStatus @default(PENDING)
+  superAdmin Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
   clinics UserClinic[]
 
@@ -246,4 +249,10 @@ enum NotificationType {
 enum UserRole {
   ADMIN
   STAFF
+}
+
+enum UserStatus {
+  PENDING
+  AUTHORIZED
+  SUSPENDED
 }

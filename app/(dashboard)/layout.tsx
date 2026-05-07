@@ -32,7 +32,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Suspense fallback={<div className="w-64 shrink-0 bg-white border-r border-gray-100" />}>
-        <Sidebar currentClinic={clinic} clinics={clinics} />
+        <Sidebar currentClinic={clinic} clinics={clinics} superAdmin={session.superAdmin} />
       </Suspense>
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Suspense fallback={<div className="h-14 bg-white border-b border-gray-100" />}>

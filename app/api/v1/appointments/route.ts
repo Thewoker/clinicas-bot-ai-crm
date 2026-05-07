@@ -20,7 +20,9 @@ async function resolveClinic(req: NextRequest) {
   if (!apiKey && !clinicId) return null;
 
   return prisma.clinic.findFirst({
-    where: apiKey ? { apiKey } : { id: clinicId! },
+    where: apiKey
+      ? { apiKey, authorized: true }
+      : { id: clinicId!, authorized: true },
   });
 }
 

@@ -30,7 +30,15 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\\\\\\(dashboard\\)\\\\calendar\" -Recurse -File)",
       "Bash(Select-Object FullName)",
       "Bash(ls -la \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\\")",
-      "Read(//c/Users/leone/Desktop/git/**)"
+      "Read(//c/Users/leone/Desktop/git/**)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\" -Force)",
+      "Bash(Select-Object Name, Mode)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\" -Force | Select-Object Name, @{Name='Type'; Expression={if\\($_.PSIsContainer\\) {'DIR'} else {'FILE'}}} | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\app\" -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\lib\" -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\components\" -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize)",
+      "Bash(2>&1)",
+      "Bash(node -e ' *)"
     ]
   }
 }

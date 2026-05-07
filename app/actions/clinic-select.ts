@@ -63,6 +63,7 @@ export async function createClinicAction(
     userName: session.userName,
     userEmail: session.userEmail,
     role: "ADMIN",
+    superAdmin: session.superAdmin,
   });
 
   await setSessionCookie(token);
@@ -77,10 +78,17 @@ export async function selectClinicAction(formData: FormData) {
 
   const clinicId = formData.get("clinicId") as string;
 
-  const userClinic = await prisma.userClinic.findUnique({
-    where: { userId_clinicId: { userId: pending.userId, clinicId } },
-    include: { clinic: true },
-  });
+  const [userClinic, user] = await Promise.all([
+    prisma.userClinic.findUnique({
+      where: { userId_clinicId: { userId: pending.userId, clinicId } },
+      include: { clinic: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: pending.userId },
+      select: { superAdmin: true },
+    }),
+  ]);
+
   if (!userClinic) redirect("/select-clinic");
 
   const token = await signSession({
@@ -91,6 +99,7 @@ export async function selectClinicAction(formData: FormData) {
     userName: pending.userName,
     userEmail: pending.userEmail,
     role: userClinic.role,
+    superAdmin: user?.superAdmin ?? false,
   });
 
   await setSessionCookie(token);
@@ -117,6 +126,7 @@ export async function switchClinicAction(clinicId: string) {
     userName: session.userName,
     userEmail: session.userEmail,
     role: userClinic.role,
+    superAdmin: session.superAdmin,
   });
 
   await setSessionCookie(token);

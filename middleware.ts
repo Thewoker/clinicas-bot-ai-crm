@@ -33,6 +33,13 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
+  // /admin routes require superAdmin
+  if (pathname.startsWith("/admin")) {
+    if (!session.superAdmin) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+  }
+
   return NextResponse.next();
 }
 
