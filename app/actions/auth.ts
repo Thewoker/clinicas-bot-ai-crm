@@ -144,16 +144,17 @@ export async function loginAction(
     return { error: "Tu cuenta ha sido suspendida. Contacta al administrador." };
   }
 
-  // Super admin with no clinics → go straight to admin panel
-  if (user.superAdmin && user.clinics.length === 0) {
+  // Super admin → always go straight to admin panel
+  if (user.superAdmin) {
+    const first = user.clinics[0];
     const token = await signSession({
       userId: user.id,
-      clinicId: "",
-      clinicName: "",
-      clinicSlug: "",
+      clinicId: first?.clinic.id ?? "",
+      clinicName: first?.clinic.name ?? "",
+      clinicSlug: first?.clinic.slug ?? "",
       userName: user.name,
       userEmail: user.email,
-      role: "ADMIN",
+      role: first?.role ?? "ADMIN",
       superAdmin: true,
     });
     await setSessionCookie(token);
@@ -175,10 +176,9 @@ export async function loginAction(
       userName: user.name,
       userEmail: user.email,
       role,
-      superAdmin: user.superAdmin,
+      superAdmin: false,
     });
     await setSessionCookie(token);
-    if (user.superAdmin) redirect("/admin");
     redirect("/dashboard");
   }
 
