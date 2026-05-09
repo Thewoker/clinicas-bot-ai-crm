@@ -4,6 +4,28 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+async function uniqueSlugExcluding(name: string, excludeId: string): Promise<string> {
+  let slug = slugify(name);
+  let count = 0;
+  while (true) {
+    const existing = await prisma.clinic.findFirst({
+      where: { slug, NOT: { id: excludeId } },
+    });
+    if (!existing) break;
+    slug = `${slugify(name)}-${++count}`;
+  }
+  return slug;
+}
+
 async function requireSuperAdmin() {
   const session = await getSession();
   if (!session?.superAdmin) throw new Error("Acceso denegado");
@@ -77,4 +99,22 @@ export async function toggleClinicAuthorizationAction(clinicId: string, authoriz
 
   revalidatePath("/admin/clinics");
   revalidatePath("/admin");
+}
+
+export async function fixClinicSlugAction(clinicId: string): Promise<{ slug: string } | { error: string }> {
+  await requireSuperAdmin();
+
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
+  if (!clinic) return { error: "Clínica no encontrada" };
+
+  const newSlug = await uniqueSlugExcluding(clinic.name, clinicId);
+
+  if (newSlug === clinic.slug) return { slug: clinic.slug };
+
+  await prisma.clinic.update({ where: { id: clinicId }, data: { slug: newSlug } });
+
+  revalidatePath("/admin/clinics");
+  revalidatePath("/admin");
+
+  return { slug: newSlug };
 }

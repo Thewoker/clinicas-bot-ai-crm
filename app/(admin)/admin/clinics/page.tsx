@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Building2, Users, CalendarDays, Wifi, WifiOff } from "lucide-react";
 import { ClinicToggle } from "./clinic-toggle";
+import { ClinicSlugFix } from "./clinic-slug-fix";
 
 async function getClinics() {
   return prisma.clinic.findMany({
@@ -42,6 +43,7 @@ export default async function AdminClinicsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-base font-semibold text-slate-900">{clinic.name}</h2>
                       <span className="text-xs text-slate-400 font-mono">/{clinic.slug}</span>
+                      <ClinicSlugFix clinicId={clinic.id} currentSlug={clinic.slug} />
                     </div>
                     {clinic.address && (
                       <p className="text-xs text-slate-400 mt-0.5">{clinic.address}</p>
