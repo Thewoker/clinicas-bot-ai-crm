@@ -2,7 +2,7 @@
 
 import { useState, useActionState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, X, User, Stethoscope, Loader2 } from "lucide-react";
 import { createAppointment, updateAppointment, cancelAppointment } from "@/app/actions/appointments";
@@ -831,8 +831,9 @@ export function DoctorCalendar({
 
   const mode = (searchParams.get("mode") as Mode) ?? initialMode;
   const doctorId = searchParams.get("doctorId") ?? initialDoctorId ?? doctors[0]?.id ?? "";
-  const dateStr = searchParams.get("date") ?? format(parseISO(currentDate), "yyyy-MM-dd");
-  const date = parseISO(dateStr); // UTC midnight
+  const dateStr = searchParams.get("date") ?? currentDate.slice(0, 10);
+  const [_y, _m, _d] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(_y, _m - 1, _d)); // true UTC midnight, independent of browser timezone
 
   const doctor = doctors.find((d) => d.id === doctorId) ?? doctors[0] ?? null;
   const docApts = appointments.filter((a) => a.doctorId === (doctor?.id ?? ""));
