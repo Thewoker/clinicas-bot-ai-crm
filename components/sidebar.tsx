@@ -18,6 +18,7 @@ import {
   Building2,
   Plus,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import clsx from "clsx";
 import { switchClinicAction } from "@/app/actions/clinic-select";
@@ -38,9 +39,10 @@ interface SidebarProps {
   currentClinic: { id: string; name: string; slug: string };
   clinics: Clinic[];
   superAdmin?: boolean;
+  onClose?: () => void;
 }
 
-export function Sidebar({ currentClinic, clinics, superAdmin }: SidebarProps) {
+export function Sidebar({ currentClinic, clinics, superAdmin, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -57,7 +59,17 @@ export function Sidebar({ currentClinic, clinics, superAdmin }: SidebarProps) {
   }
 
   return (
-    <aside className="flex flex-col w-64 min-h-screen bg-white border-r border-gray-100 shadow-sm shrink-0">
+    <aside className="flex flex-col w-64 h-full bg-white border-r border-gray-100 shadow-sm shrink-0">
+      {/* Mobile close button */}
+      <div className="flex justify-end px-3 pt-3 lg:hidden">
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
       {/* Clinic header / switcher */}
       <div className="relative border-b border-gray-100">
         <button
@@ -128,6 +140,7 @@ export function Sidebar({ currentClinic, clinics, superAdmin }: SidebarProps) {
             <Link
               key={href}
               href={href}
+              onClick={onClose}
               className={clsx(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 active
@@ -168,6 +181,7 @@ export function Sidebar({ currentClinic, clinics, superAdmin }: SidebarProps) {
         </div>
         <Link
           href="/settings"
+          onClick={onClose}
           className={clsx(
             "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm font-medium",
             pathname === "/settings"
@@ -181,6 +195,7 @@ export function Sidebar({ currentClinic, clinics, superAdmin }: SidebarProps) {
         {superAdmin && (
           <Link
             href="/admin"
+            onClick={onClose}
             className="w-full flex items-center gap-3 px-3 py-2 mt-1 rounded-lg transition-colors text-sm font-medium text-violet-500 hover:bg-violet-50 hover:text-violet-700"
           >
             <ShieldCheck className="w-4 h-4 shrink-0" />

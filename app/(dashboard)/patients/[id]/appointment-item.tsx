@@ -4,10 +4,20 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Clock, User2 } from "lucide-react";
-import type { getPatientAppointments } from "@/lib/data";
 import { AppointmentEditModal, type AppointmentForEdit } from "./appointment-edit-modal";
 
-type Appointment = Awaited<ReturnType<typeof getPatientAppointments>>[number];
+interface Appointment {
+  id: string;
+  doctorId: string;
+  patientId: string;
+  service: string;
+  price: number;
+  startTime: Date | string;
+  endTime: Date | string;
+  status: string;
+  notes: string | null;
+  doctor: { name: string; color: string };
+}
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   SCHEDULED: { label: "Programada",  className: "bg-blue-50 text-blue-600" },

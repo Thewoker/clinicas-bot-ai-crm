@@ -114,7 +114,7 @@ export default async function PatientNotesPage({
             {appointments.map((appt) => (
               <AppointmentItem
                 key={appt.id}
-                appointment={appt}
+                appointment={{ ...appt, price: Number(appt.price) }}
                 patientName={patient.name}
                 patientPhone={patient.phone}
                 canNotifyWhatsapp={canNotifyWhatsapp}

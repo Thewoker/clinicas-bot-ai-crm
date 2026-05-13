@@ -130,7 +130,7 @@ export default async function CalendarPage({
   return (
     <div className="space-y-4 h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Calendario de Turnos</h1>
           <p className="text-sm text-gray-500 mt-0.5 capitalize">
@@ -139,7 +139,7 @@ export default async function CalendarPage({
         </div>
 
         {/* View switcher */}
-        <div className="flex bg-gray-100 rounded-xl p-1 gap-1 shrink-0">
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1 shrink-0 self-start sm:self-auto">
           <Link
             href={`/calendar?view=clinic&date=${dateStr}`}
             className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${

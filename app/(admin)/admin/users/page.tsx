@@ -54,7 +54,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-150">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
               <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Usuario</th>
@@ -124,7 +125,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               </tr>
             )}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
     </div>
   );

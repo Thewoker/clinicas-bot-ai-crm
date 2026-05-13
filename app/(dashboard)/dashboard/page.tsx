@@ -77,7 +77,7 @@ export default async function DashboardPage() {
               todayAppointments.map((apt) => {
                 const status = STATUS_LABELS[apt.status] ?? STATUS_LABELS.SCHEDULED;
                 return (
-                  <div key={apt.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors">
+                  <div key={apt.id} className="flex items-center gap-2 sm:gap-4 px-4 sm:px-5 py-3.5 hover:bg-gray-50 transition-colors">
                     <div className="w-1 h-10 rounded-full shrink-0" style={{ backgroundColor: apt.doctor.color }} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-gray-900 truncate">{apt.patient.name}</p>
@@ -130,7 +130,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white">
+          <div className="bg-linear-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white">
             <p className="text-xs font-medium text-emerald-100 mb-1">API Key de IA</p>
             <p className="text-xs font-mono bg-emerald-600/50 rounded-lg px-3 py-2 mt-2 break-all">{clinicSlug}</p>
             <p className="text-xs text-emerald-200 mt-2">

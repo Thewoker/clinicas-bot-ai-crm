@@ -44,14 +44,14 @@ export default async function DoctorsPage() {
 
   return (
     <div className="space-y-4 max-w-5xl">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Médicos</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {doctors.length} médico{doctors.length !== 1 ? "s" : ""} en {session.clinicName}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 sm:shrink-0">
           <div className="flex items-center gap-2 bg-violet-50 text-violet-700 text-sm font-medium px-4 py-2 rounded-xl">
             <Stethoscope className="w-4 h-4" />
             {doctors.length} activos

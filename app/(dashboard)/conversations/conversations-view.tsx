@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { MessageSquare, Phone, Send, Loader2, RefreshCw } from "lucide-react";
+import { MessageSquare, Phone, Send, Loader2, RefreshCw, ArrowLeft } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -35,7 +35,6 @@ interface ConversationDetail {
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/^\+/, "");
-  // Argentine mobile: 549 + area(2-4 digits) + number → +54 9 XX XXXX-XXXX
   if (digits.startsWith("549") && digits.length === 13) {
     const area = digits.slice(3, 5);
     const part1 = digits.slice(5, 9);
@@ -64,6 +63,7 @@ export function ConversationsView() {
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [showingChat, setShowingChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
@@ -81,7 +81,6 @@ export function ConversationsView() {
     fetchConversations();
   }, [fetchConversations]);
 
-  // Poll conversation list every 15s silently, only when tab is visible
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === "visible") fetchConversations(true);
@@ -89,7 +88,6 @@ export function ConversationsView() {
     return () => clearInterval(id);
   }, [fetchConversations]);
 
-  // Poll active conversation messages every 5s, only when tab is visible and not sending
   useEffect(() => {
     if (!selectedId) return;
     const id = setInterval(async () => {
@@ -110,7 +108,11 @@ export function ConversationsView() {
   }, [detail?.messages.length]);
 
   async function selectConversation(id: string) {
-    if (id === selectedId) return;
+    if (id === selectedId) {
+      setShowingChat(true);
+      return;
+    }
+    setShowingChat(true);
     setSelectedId(id);
     setDetail(null);
     setSendError(null);
@@ -162,12 +164,15 @@ export function ConversationsView() {
     (m) => extractText(m.content) !== null
   );
 
-  const selected = conversations.find((c) => c.id === selectedId);
-
   return (
-    <div className="-m-6 flex overflow-hidden" style={{ height: "calc(100vh - 3.5rem)" }}>
+    <div className="-m-4 sm:-m-6 flex overflow-hidden" style={{ height: "calc(100vh - 3.5rem)" }}>
       {/* Conversation list */}
-      <div className="w-72 shrink-0 border-r border-gray-100 bg-white flex flex-col">
+      <div
+        className={[
+          "w-full sm:w-72 shrink-0 border-r border-gray-100 bg-white flex-col",
+          showingChat ? "hidden sm:flex" : "flex",
+        ].join(" ")}
+      >
         <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h1 className="text-sm font-bold text-gray-900">Conversaciones</h1>
@@ -241,7 +246,12 @@ export function ConversationsView() {
       </div>
 
       {/* Chat panel */}
-      <div className="flex-1 flex flex-col bg-gray-50 min-w-0">
+      <div
+        className={[
+          "flex-1 flex-col bg-gray-50 min-w-0",
+          showingChat ? "flex" : "hidden sm:flex",
+        ].join(" ")}
+      >
         {!selectedId ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
             <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
@@ -261,7 +271,13 @@ export function ConversationsView() {
         ) : detail ? (
           <>
             {/* Header */}
-            <div className="px-5 py-3 bg-white border-b border-gray-100 flex items-center gap-3 shrink-0">
+            <div className="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowingChat(false)}
+                className="sm:hidden p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 -ml-1 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
               <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
                 <span className="text-xs font-bold text-emerald-700">
                   {(detail.patient?.name ?? detail.displayName ?? detail.patientPhone).charAt(0).toUpperCase()}
@@ -281,7 +297,7 @@ export function ConversationsView() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-2.5">
               {visibleMessages.length === 0 ? (
                 <p className="text-center text-xs text-gray-400 py-8">Sin mensajes</p>
               ) : (
@@ -291,7 +307,7 @@ export function ConversationsView() {
                   return (
                     <div key={idx} className={`flex ${isUser ? "justify-start" : "justify-end"}`}>
                       <div
-                        className={`max-w-[72%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                        className={`max-w-[80%] sm:max-w-[72%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap wrap-break-word ${
                           isUser
                             ? "bg-white border border-gray-100 text-gray-800 rounded-tl-sm shadow-sm"
                             : "bg-emerald-500 text-white rounded-tr-sm"
@@ -322,7 +338,7 @@ export function ConversationsView() {
                       sendMessage();
                     }
                   }}
-                  placeholder="Escribe un mensaje… (Enter para enviar, Shift+Enter para nueva línea)"
+                  placeholder="Escribe un mensaje… (Enter para enviar)"
                   rows={1}
                   className="flex-1 resize-none rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 />

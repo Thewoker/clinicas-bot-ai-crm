@@ -9,6 +9,7 @@ import {
   CalendarClock,
   MessageCircle,
   CheckCheck,
+  Menu,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -65,7 +66,15 @@ const NOTIFICATION_CONFIG: Record<
   },
 };
 
-export function Topbar({ clinic, user }: { clinic: Clinic; user: User }) {
+export function Topbar({
+  clinic,
+  user,
+  onMenuClick,
+}: {
+  clinic: Clinic;
+  user: User;
+  onMenuClick?: () => void;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -88,7 +97,6 @@ export function Topbar({ clinic, user }: { clinic: Clinic; user: User }) {
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
-  // Close notification panel on outside click
   useEffect(() => {
     if (!notifOpen) return;
     function onMouseDown(e: MouseEvent) {
@@ -133,14 +141,28 @@ export function Topbar({ clinic, user }: { clinic: Clinic; user: User }) {
     .toUpperCase();
 
   return (
-    <header className="h-14 bg-white border-b border-gray-100 px-6 flex items-center justify-between sticky top-0 z-10">
-      {/* Clinic badge */}
+    <header className="h-14 bg-white border-b border-gray-100 px-4 flex items-center justify-between sticky top-0 z-10 shrink-0">
       <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-        <span className="text-sm font-semibold text-gray-800">{clinic.name}</span>
-        <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
-          {user.role === "ADMIN" ? "Administrador" : "Staff"}
-        </span>
+        {/* Hamburger — mobile only */}
+        {onMenuClick && (
+          <button
+            onClick={onMenuClick}
+            className="lg:hidden p-2 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Clinic badge */}
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+          <span className="text-sm font-semibold text-gray-800 truncate max-w-35 sm:max-w-none">
+            {clinic.name}
+          </span>
+          <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 hidden sm:inline">
+            {user.role === "ADMIN" ? "Administrador" : "Staff"}
+          </span>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
@@ -159,8 +181,7 @@ export function Topbar({ clinic, user }: { clinic: Clinic; user: User }) {
           </button>
 
           {notifOpen && (
-            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 w-80 overflow-hidden">
-              {/* Header */}
+            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 w-72 sm:w-80 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-xs font-bold text-gray-800">Notificaciones</p>
                 {unreadCount > 0 && (
@@ -174,7 +195,6 @@ export function Topbar({ clinic, user }: { clinic: Clinic; user: User }) {
                 )}
               </div>
 
-              {/* List */}
               <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
                 {notifications.length === 0 ? (
                   <div className="py-10 text-center">
