@@ -78,7 +78,8 @@ export async function POST(req: NextRequest) {
     clinic.waBotWelcome ?? `Hola, hablas con el asistente de ${clinic.name}. ¿En qué puedo ayudarte?`
   );
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  let baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  if (baseUrl && !baseUrl.startsWith("http")) baseUrl = `https://${baseUrl}`;
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
 
   return texml(`

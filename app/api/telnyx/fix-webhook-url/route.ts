@@ -11,7 +11,8 @@ export async function POST() {
     return NextResponse.json({ error: "Telnyx no configurado" }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  let appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  if (appUrl && !appUrl.startsWith("http")) appUrl = `https://${appUrl}`;
   const voiceUrl = `${appUrl}/api/webhook/telnyx/voice`;
 
   const res = await fetch(`https://api.telnyx.com/v2/texml_applications/${clinic.telnyxAppId}`, {

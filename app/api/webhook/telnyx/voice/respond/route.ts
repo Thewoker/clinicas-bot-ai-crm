@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
   const to = params.get("To") ?? "";
   const from = params.get("From") ?? "";
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  let baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  if (baseUrl && !baseUrl.startsWith("http")) baseUrl = `https://${baseUrl}`;
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
 
   console.log("[voice/respond] params:", { callSid, to, from });

@@ -41,8 +41,14 @@ async function ensureOvpWhitelist(apiKey: string, ovpId: string, country: string
   console.log("[test-call] added", country, "to OVP whitelist");
 }
 
+function getAppUrl(): string {
+  let url = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  if (url && !url.startsWith("http")) url = `https://${url}`;
+  return url;
+}
+
 async function ensureWebhookUrl(apiKey: string, appId: string): Promise<void> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = getAppUrl();
   const expected = `${appUrl}/api/webhook/telnyx/voice`;
   const appRes = await tReq(apiKey, "GET", `/texml_applications/${appId}`);
   if (!appRes.ok) return;
