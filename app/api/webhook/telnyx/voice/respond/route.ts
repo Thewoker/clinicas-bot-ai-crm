@@ -1,20 +1,13 @@
 /**
  * POST /api/webhook/telnyx/voice/respond
  *
- * Called by Telnyx after each <Record> completes.
- * Downloads the recording with Bearer auth, transcribes with Groq Whisper,
- * runs the Claude bot, and responds with <Say> + next <Record>.
- *
- * Telnyx TeXML sends (among others):
- *   CallSid           — unique call identifier
- *   RecordingUrl      — URL to the audio file (requires Bearer auth)
- *   RecordingDuration — seconds recorded
- *   To                — clinic's Telnyx phone number
+ * Called by Telnyx after each <Gather input="speech"> completes.
+ * Receives SpeechResult (already transcribed by Telnyx), runs the Claude bot,
+ * and responds with the next <Gather> turn.
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { transcribeUrlWithAuth } from "@/lib/transcription";
 import { runBot, BotMessage, ClinicContext } from "@/lib/claude-bot";
 
 export const dynamic = "force-dynamic";
@@ -40,18 +33,13 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function sayAndRecord(text: string, respondUrl: string): string {
+function sayAndGather(text: string, respondUrl: string): string {
   const safe = escapeXml(text);
   return `
-    <Say language="es-MX">${safe}</Say>
-    <Record
-      action="${respondUrl}"
-      maxLength="60"
-      timeout="10"
-      trim="trim-silence"
-      playBeep="true"
-    />
-    <Say language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
+    <Gather input="speech" action="${respondUrl}" speechTimeout="3" language="es-MX" profanityFilter="false">
+      <Say voice="Polly.Lupe-Neural" language="es-MX">${safe}</Say>
+    </Gather>
+    <Say voice="Polly.Lupe-Neural" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
     <Hangup/>
   `;
 }
@@ -61,8 +49,7 @@ export async function POST(req: NextRequest) {
   const params = new URLSearchParams(text);
 
   const callSid = params.get("CallSid") ?? "";
-  const recordingUrl = params.get("RecordingUrl") ?? "";
-  const recordingDuration = parseInt(params.get("RecordingDuration") ?? "0", 10);
+  const speechResult = params.get("SpeechResult") ?? "";
   const to = params.get("To") ?? "";
   const from = params.get("From") ?? "";
 
@@ -70,9 +57,8 @@ export async function POST(req: NextRequest) {
   if (baseUrl && !baseUrl.startsWith("http")) baseUrl = `https://${baseUrl}`;
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
 
-  console.log("[voice/respond] params:", { callSid, to, from });
+  console.log("[voice/respond] params:", { callSid, to, from, speechResult: speechResult.slice(0, 80) });
 
-  // Inbound: To = clinic phone. Outbound (test call): From = clinic phone.
   const normalize = (n: string) => n.startsWith("+") ? n : `+${n}`;
   const clinic = await prisma.clinic.findFirst({
     where: { telnyxPhoneNumber: normalize(to) },
@@ -80,21 +66,12 @@ export async function POST(req: NextRequest) {
     where: { telnyxPhoneNumber: normalize(from) },
   });
 
-  console.log("[voice/respond] clinic found:", clinic?.id ?? "NOT FOUND");
-
   if (!clinic) {
-    return texml(
-      `<Say language="es-MX">Ocurrió un error. Hasta luego.</Say><Hangup/>`
-    );
+    return texml(`<Say voice="Polly.Lupe-Neural" language="es-MX">Ocurrió un error. Hasta luego.</Say><Hangup/>`);
   }
 
   const conversation = await prisma.whatsappConversation.findUnique({
-    where: {
-      clinicId_patientPhone: {
-        clinicId: clinic.id,
-        patientPhone: `call:${callSid}`,
-      },
-    },
+    where: { clinicId_patientPhone: { clinicId: clinic.id, patientPhone: `call:${callSid}` } },
   });
 
   const history = ((conversation?.messages ?? []) as unknown as BotMessage[]);
@@ -102,33 +79,15 @@ export async function POST(req: NextRequest) {
   const assistantTurns = history.filter((m) => m.role === "assistant").length;
   if (assistantTurns >= MAX_TURNS) {
     return texml(
-      `<Say language="es-MX">Hemos llegado al límite de la conversación. Llamá nuevamente si necesitás más ayuda. Hasta luego.</Say><Hangup/>`
+      `<Say voice="Polly.Lupe-Neural" language="es-MX">Hemos llegado al límite de la conversación. Llamá nuevamente si necesitás más ayuda. Hasta luego.</Say><Hangup/>`
     );
   }
 
-  if (!recordingUrl || recordingDuration < 1) {
-    return texml(sayAndRecord("No escuché tu respuesta. ¿Podés repetirlo?", respondUrl));
+  if (!speechResult.trim()) {
+    return texml(sayAndGather("No escuché tu respuesta. ¿Podés repetirlo?", respondUrl));
   }
 
-  // Telnyx recordings require Bearer auth
-  const telnyxApiKey = clinic.telnyxApiKey ?? "";
-  let userText: string;
-  try {
-    userText = await transcribeUrlWithAuth(
-      recordingUrl,
-      "audio/mpeg",
-      `Bearer ${telnyxApiKey}`
-    );
-  } catch (err) {
-    console.error(`[telnyx/voice] Transcription failed for call ${callSid}:`, err);
-    return texml(sayAndRecord("Tuve un problema procesando tu mensaje. ¿Podés repetirlo?", respondUrl));
-  }
-
-  if (!userText) {
-    return texml(sayAndRecord("No pude entender lo que dijiste. ¿Podés repetirlo?", respondUrl));
-  }
-
-  console.log(`[telnyx/voice] ${callSid} → "${userText}"`);
+  console.log(`[telnyx/voice] ${callSid} → "${speechResult}"`);
 
   const clinicCtx: ClinicContext = {
     id: clinic.id,
@@ -144,7 +103,7 @@ export async function POST(req: NextRequest) {
   const { reply, updatedHistory } = await runBot(
     clinicCtx,
     history,
-    userText,
+    speechResult,
     `call:${callSid}`
   );
 
@@ -157,9 +116,9 @@ export async function POST(req: NextRequest) {
 
   if (FAREWELL_RE.test(reply)) {
     return texml(
-      `<Say language="es-MX">${escapeXml(reply)}</Say><Hangup/>`
+      `<Say voice="Polly.Lupe-Neural" language="es-MX">${escapeXml(reply)}</Say><Hangup/>`
     );
   }
 
-  return texml(sayAndRecord(reply, respondUrl));
+  return texml(sayAndGather(reply, respondUrl));
 }
