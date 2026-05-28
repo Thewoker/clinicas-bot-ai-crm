@@ -7,6 +7,7 @@ import {
   disconnectTelnyx,
 } from "@/app/actions/telnyx";
 import { Loader2, CheckCircle2, XCircle, Phone, Eye, EyeOff, ExternalLink, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
+import { TelnyxDialer } from "./telnyx-dialer";
 
 interface Props {
   telnyxApiKey: string | null;
@@ -251,6 +252,9 @@ export function TelnyxForm({ telnyxApiKey, telnyxPhoneNumber }: Props) {
           )}
         </div>
       )}
+
+      {/* In-app WebRTC dialer */}
+      {isConnected && <TelnyxDialer />}
 
       {/* Disconnect */}
       {isConnected && (

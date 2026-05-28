@@ -38,7 +38,8 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\lib\" -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\components\" -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize)",
       "Bash(2>&1)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(node -e \"require\\('@telnyx/webrtc'\\); console.log\\('ok'\\)\")"
     ]
   }
 }

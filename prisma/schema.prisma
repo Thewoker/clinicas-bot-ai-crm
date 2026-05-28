@@ -29,10 +29,12 @@ model Clinic {
   waActive        Boolean @default(false)
 
   // Telnyx Voice Calls
-  telnyxApiKey        String?  // Clinic's own Telnyx API key
-  telnyxPhoneNumberId String?  // Telnyx phone number resource ID
-  telnyxPhoneNumber   String?  // Actual phone number e.g. +34911234567
-  telnyxAppId         String?  // Telnyx TeXML application ID
+  telnyxApiKey          String?  // Clinic's own Telnyx API key
+  telnyxPhoneNumberId   String?  // Telnyx phone number resource ID
+  telnyxPhoneNumber     String?  // Actual phone number e.g. +34911234567
+  telnyxAppId           String?  // Telnyx TeXML application ID
+  telnyxSipConnectionId  String?  // Credential Connection ID (SIP, required by Telnyx for WebRTC)
+  telnyxSipCredentialId  String?  // Telephony credential ID for in-app WebRTC calling
 
   userClinics           UserClinic[]
   doctors               Doctor[]

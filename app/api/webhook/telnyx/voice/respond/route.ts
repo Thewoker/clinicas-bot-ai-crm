@@ -43,15 +43,15 @@ function escapeXml(str: string): string {
 function sayAndRecord(text: string, respondUrl: string): string {
   const safe = escapeXml(text);
   return `
-    <Say voice="alice" language="es-MX">${safe}</Say>
+    <Say language="es-MX">${safe}</Say>
     <Record
       action="${respondUrl}"
-      maxLength="30"
-      timeout="5"
+      maxLength="60"
+      timeout="10"
       trim="trim-silence"
-      playBeep="false"
+      playBeep="true"
     />
-    <Say voice="alice" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
+    <Say language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
     <Hangup/>
   `;
 }
@@ -64,17 +64,26 @@ export async function POST(req: NextRequest) {
   const recordingUrl = params.get("RecordingUrl") ?? "";
   const recordingDuration = parseInt(params.get("RecordingDuration") ?? "0", 10);
   const to = params.get("To") ?? "";
+  const from = params.get("From") ?? "";
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
 
+  console.log("[voice/respond] params:", { callSid, to, from });
+
+  // Inbound: To = clinic phone. Outbound (test call): From = clinic phone.
+  const normalize = (n: string) => n.startsWith("+") ? n : `+${n}`;
   const clinic = await prisma.clinic.findFirst({
-    where: { telnyxPhoneNumber: to },
+    where: { telnyxPhoneNumber: normalize(to) },
+  }) ?? await prisma.clinic.findFirst({
+    where: { telnyxPhoneNumber: normalize(from) },
   });
+
+  console.log("[voice/respond] clinic found:", clinic?.id ?? "NOT FOUND");
 
   if (!clinic) {
     return texml(
-      `<Say voice="alice" language="es-MX">Ocurrió un error. Hasta luego.</Say><Hangup/>`
+      `<Say language="es-MX">Ocurrió un error. Hasta luego.</Say><Hangup/>`
     );
   }
 
@@ -92,7 +101,7 @@ export async function POST(req: NextRequest) {
   const assistantTurns = history.filter((m) => m.role === "assistant").length;
   if (assistantTurns >= MAX_TURNS) {
     return texml(
-      `<Say voice="alice" language="es-MX">Hemos llegado al límite de la conversación. Llamá nuevamente si necesitás más ayuda. Hasta luego.</Say><Hangup/>`
+      `<Say language="es-MX">Hemos llegado al límite de la conversación. Llamá nuevamente si necesitás más ayuda. Hasta luego.</Say><Hangup/>`
     );
   }
 
@@ -147,7 +156,7 @@ export async function POST(req: NextRequest) {
 
   if (FAREWELL_RE.test(reply)) {
     return texml(
-      `<Say voice="alice" language="es-MX">${escapeXml(reply)}</Say><Hangup/>`
+      `<Say language="es-MX">${escapeXml(reply)}</Say><Hangup/>`
     );
   }
 

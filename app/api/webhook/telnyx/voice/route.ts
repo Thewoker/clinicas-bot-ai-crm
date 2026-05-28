@@ -37,15 +37,25 @@ export async function POST(req: NextRequest) {
   const params = new URLSearchParams(text);
 
   const to = params.get("To") ?? "";
+  const from = params.get("From") ?? "";
   const callSid = params.get("CallSid") ?? "";
 
+  console.log("[voice] webhook params:", { to, from, callSid, direction: params.get("Direction") });
+
+  // Inbound: To = clinic phone. Outbound (test call): From = clinic phone.
+  // Normalize: ensure E.164 with leading +
+  const normalize = (n: string) => n.startsWith("+") ? n : `+${n}`;
   const clinic = await prisma.clinic.findFirst({
-    where: { telnyxPhoneNumber: to },
+    where: { telnyxPhoneNumber: normalize(to) },
+  }) ?? await prisma.clinic.findFirst({
+    where: { telnyxPhoneNumber: normalize(from) },
   });
+
+  console.log("[voice] clinic found:", clinic?.id ?? "NOT FOUND", "| to:", to, "| from:", from);
 
   if (!clinic) {
     return texml(
-      `<Say voice="alice" language="es-MX">Lo siento, este número no se encuentra disponible.</Say><Hangup/>`
+      `<Say language="es-MX">Lo siento, este número no se encuentra disponible.</Say><Hangup/>`
     );
   }
 
@@ -72,15 +82,16 @@ export async function POST(req: NextRequest) {
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
 
   return texml(`
-    <Say voice="alice" language="es-MX">${welcome}</Say>
+    <Pause length="1"/>
+    <Say language="es-MX">${welcome}</Say>
     <Record
       action="${respondUrl}"
-      maxLength="30"
-      timeout="5"
+      maxLength="60"
+      timeout="10"
       trim="trim-silence"
-      playBeep="false"
+      playBeep="true"
     />
-    <Say voice="alice" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
+    <Say language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
     <Hangup/>
   `);
 }

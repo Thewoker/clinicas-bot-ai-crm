@@ -15,6 +15,7 @@
     "@anthropic-ai/sdk": "^0.88.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
+    "@telnyx/webrtc": "^2.27.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.20.0",
     "@whiskeysockets/baileys": "^6.17.16",
