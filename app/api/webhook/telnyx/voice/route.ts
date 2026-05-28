@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
 
   return texml(`
     <Pause length="1"/>
-    <Say voice="Polly.Lupe-Neural" language="es-MX">${welcome}</Say>
+    <Say voice="Polly.Lupe" language="es-MX">${welcome}</Say>
     <Record
       action="${respondUrl}"
       maxLength="60"
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       trim="trim-silence"
       playBeep="false"
     />
-    <Say voice="Polly.Lupe-Neural" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
+    <Say voice="Polly.Lupe" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
     <Hangup/>
   `);
 }

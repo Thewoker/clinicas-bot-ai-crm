@@ -29,7 +29,7 @@ function escapeXml(str: string): string {
 function sayAndRecord(text: string, respondUrl: string): string {
   const safe = escapeXml(text);
   return `
-    <Say voice="Polly.Lupe-Neural" language="es-MX">${safe}</Say>
+    <Say voice="Polly.Lupe" language="es-MX">${safe}</Say>
     <Record
       action="${respondUrl}"
       maxLength="60"
@@ -37,7 +37,7 @@ function sayAndRecord(text: string, respondUrl: string): string {
       trim="trim-silence"
       playBeep="false"
     />
-    <Say voice="Polly.Lupe-Neural" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
+    <Say voice="Polly.Lupe" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
     <Hangup/>
   `;
 }
@@ -56,7 +56,9 @@ export async function POST(req: NextRequest) {
   if (baseUrl && !baseUrl.startsWith("http")) baseUrl = `https://${baseUrl}`;
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
 
-  console.log("[voice/respond] params:", { callSid, to, from, recordingDuration });
+  const allParams: Record<string, string> = {};
+  params.forEach((v, k) => { allParams[k] = v; });
+  console.log("[voice/respond] ALL params:", JSON.stringify(allParams));
 
   const normalize = (n: string) => n.startsWith("+") ? n : `+${n}`;
   const clinic = await prisma.clinic.findFirst({
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (!clinic) {
-    return texml(`<Say voice="Polly.Lupe-Neural" language="es-MX">Ocurrió un error. Hasta luego.</Say><Hangup/>`);
+    return texml(`<Say voice="Polly.Lupe" language="es-MX">Ocurrió un error. Hasta luego.</Say><Hangup/>`);
   }
 
   const conversation = await prisma.whatsappConversation.findUnique({
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
   const assistantTurns = history.filter((m) => m.role === "assistant").length;
   if (assistantTurns >= MAX_TURNS) {
     return texml(
-      `<Say voice="Polly.Lupe-Neural" language="es-MX">Hemos llegado al límite de la conversación. Llamá nuevamente si necesitás más ayuda. Hasta luego.</Say><Hangup/>`
+      `<Say voice="Polly.Lupe" language="es-MX">Hemos llegado al límite de la conversación. Llamá nuevamente si necesitás más ayuda. Hasta luego.</Say><Hangup/>`
     );
   }
 
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (FAREWELL_RE.test(reply)) {
-    return texml(`<Say voice="Polly.Lupe-Neural" language="es-MX">${escapeXml(reply)}</Say><Hangup/>`);
+    return texml(`<Say voice="Polly.Lupe" language="es-MX">${escapeXml(reply)}</Say><Hangup/>`);
   }
 
   return texml(sayAndRecord(reply, respondUrl));
