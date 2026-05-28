@@ -49,6 +49,12 @@ export async function POST(req: NextRequest) {
   const text = await req.text();
   const params = new URLSearchParams(text);
 
+  // Telnyx fires full-call auto-recordings to the same URL — ignore them
+  if (params.get("RecordingSource") === "StartCallRecordingAPI") {
+    console.log("[voice/respond] Ignoring auto-recording (StartCallRecordingAPI)");
+    return new Response("OK", { status: 200 });
+  }
+
   const callSid = params.get("CallSid") ?? "";
   const recordingUrl = params.get("RecordingUrl") ?? "";
   const recordingDuration = parseInt(params.get("RecordingDuration") ?? "0", 10);
