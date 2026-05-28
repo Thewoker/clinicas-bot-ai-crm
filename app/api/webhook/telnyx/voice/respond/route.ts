@@ -42,7 +42,10 @@ function sayAndRecord(text: string, respondUrl: string): string {
   `;
 }
 
+const VOICE_TIMEOUT_MS = 25000;
+
 export async function POST(req: NextRequest) {
+  const t0 = Date.now();
   const text = await req.text();
   const params = new URLSearchParams(text);
 
@@ -80,7 +83,7 @@ export async function POST(req: NextRequest) {
   const assistantTurns = history.filter((m) => m.role === "assistant").length;
   if (assistantTurns >= MAX_TURNS) {
     return texml(
-      `<Say voice="Polly.Lupe" language="es-MX">Hemos llegado al límite de la conversación. Llamá nuevamente si necesitás más ayuda. Hasta luego.</Say><Hangup/>`
+      `<Say voice="Polly.Lupe" language="es-MX">Hemos llegado al límite de la conversación. Hasta luego.</Say><Hangup/>`
     );
   }
 
@@ -91,7 +94,9 @@ export async function POST(req: NextRequest) {
   const telnyxApiKey = clinic.telnyxApiKey ?? "";
   let userText: string;
   try {
+    const tStt0 = Date.now();
     userText = await transcribeUrlWithAuth(recordingUrl, "audio/mpeg", `Bearer ${telnyxApiKey}`);
+    console.log(`[voice/respond] STT took ${Date.now() - tStt0}ms → "${userText}"`);
   } catch (err) {
     console.error(`[telnyx/voice] Transcription failed for call ${callSid}:`, err);
     return texml(sayAndRecord("Tuve un problema procesando tu mensaje. ¿Podés repetirlo?", respondUrl));
@@ -114,7 +119,24 @@ export async function POST(req: NextRequest) {
     timezone: clinic.timezone,
   };
 
-  const { reply, updatedHistory } = await runBot(clinicCtx, history, userText, `call:${callSid}`);
+  let reply: string;
+  let updatedHistory: BotMessage[];
+
+  try {
+    const tBot0 = Date.now();
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("bot_timeout")), VOICE_TIMEOUT_MS)
+    );
+    ({ reply, updatedHistory } = await Promise.race([
+      runBot(clinicCtx, history, userText, `call:${callSid}`, true),
+      timeout,
+    ]));
+    console.log(`[voice/respond] bot took ${Date.now() - tBot0}ms | total ${Date.now() - t0}ms`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[voice/respond] bot error (${msg}) after ${Date.now() - t0}ms`);
+    return texml(sayAndRecord("Tuve un problema al responder. ¿Podés repetirlo?", respondUrl));
+  }
 
   if (conversation) {
     await prisma.whatsappConversation.update({

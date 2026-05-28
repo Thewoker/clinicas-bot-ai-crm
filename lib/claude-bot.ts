@@ -835,7 +835,8 @@ export async function runBot(
   clinic: ClinicContext,
   history: BotMessage[],
   newUserMessage: string,
-  patientPhone: string = ""
+  patientPhone: string = "",
+  voiceMode: boolean = false
 ): Promise<{ reply: string; updatedHistory: BotMessage[] }> {
   // Load knowledge base if not already provided
   if (!clinic.knowledgeBase) {
@@ -872,12 +873,16 @@ export async function runBot(
 
   let current = [...trimmed];
 
+  const systemPrompt = buildSystemPrompt(clinic, patientPhone) + (voiceMode
+    ? "\n\nMODO VOZ ACTIVO: Estás en una llamada telefónica. Responde SIEMPRE en 1 o 2 frases cortas y naturales, como una recepcionista humana por teléfono. NUNCA uses listas, guiones, asteriscos, numeraciones ni formatos de texto — solo texto hablado. Sé directa y concisa."
+    : "");
+
   // Tool use loop — runs until Claude returns end_turn with text
   for (let iterations = 0; iterations < 12; iterations++) {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001", // fast + cheap for chatbot
-      max_tokens: 1024,
-      system: buildSystemPrompt(clinic, patientPhone),
+      max_tokens: voiceMode ? 300 : 1024,
+      system: systemPrompt,
       tools: TOOLS,
       messages: current as Anthropic.MessageParam[],
     });
