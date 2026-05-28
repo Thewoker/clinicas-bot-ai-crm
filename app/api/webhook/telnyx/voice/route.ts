@@ -81,14 +81,15 @@ export async function POST(req: NextRequest) {
   let baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   if (baseUrl && !baseUrl.startsWith("http")) baseUrl = `https://${baseUrl}`;
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
+  console.log("[voice] respondUrl:", respondUrl);
 
   return texml(`
     <Pause length="1"/>
     <Say voice="Polly.Lupe" language="es-MX">${welcome}</Say>
     <Record
       action="${respondUrl}"
-      maxLength="60"
-      timeout="3"
+      maxLength="15"
+      timeout="5"
       trim="trim-silence"
       playBeep="false"
     />

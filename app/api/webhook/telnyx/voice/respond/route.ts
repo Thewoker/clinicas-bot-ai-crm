@@ -32,8 +32,8 @@ function sayAndRecord(text: string, respondUrl: string): string {
     <Say voice="Polly.Lupe" language="es-MX">${safe}</Say>
     <Record
       action="${respondUrl}"
-      maxLength="60"
-      timeout="3"
+      maxLength="15"
+      timeout="5"
       trim="trim-silence"
       playBeep="false"
     />
