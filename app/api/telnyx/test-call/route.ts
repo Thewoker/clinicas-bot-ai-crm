@@ -49,15 +49,19 @@ function getAppUrl(): string {
 
 async function ensureWebhookUrl(apiKey: string, appId: string): Promise<void> {
   const appUrl = getAppUrl();
-  const expected = `${appUrl}/api/webhook/telnyx/voice`;
+  const expectedVoice = `${appUrl}/api/webhook/telnyx/voice`;
+  const expectedStatus = `${appUrl}/api/webhook/telnyx/voice/status`;
   const appRes = await tReq(apiKey, "GET", `/texml_applications/${appId}`);
   if (!appRes.ok) return;
   const { data: app } = await appRes.json();
-  if (app?.voice_url === expected) return;
-  console.log("[test-call] Fixing voice_url from", app?.voice_url, "to", expected);
+  const voiceOk = app?.voice_url === expectedVoice;
+  const statusOk = app?.status_callback_url === expectedStatus;
+  if (voiceOk && statusOk) return;
+  console.log("[test-call] Fixing TeXML app URLs. voice_url:", app?.voice_url, "→", expectedVoice, "| status_callback_url:", app?.status_callback_url, "→", expectedStatus);
   await tReq(apiKey, "PATCH", `/texml_applications/${appId}`, {
-    voice_url: expected,
-    voice_fallback_url: expected,
+    voice_url: expectedVoice,
+    voice_fallback_url: expectedVoice,
+    status_callback_url: expectedStatus,
   });
 }
 

@@ -14,6 +14,7 @@ export async function POST() {
   let appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   if (appUrl && !appUrl.startsWith("http")) appUrl = `https://${appUrl}`;
   const voiceUrl = `${appUrl}/api/webhook/telnyx/voice`;
+  const statusUrl = `${appUrl}/api/webhook/telnyx/voice/status`;
 
   const res = await fetch(`https://api.telnyx.com/v2/texml_applications/${clinic.telnyxAppId}`, {
     method: "PATCH",
@@ -21,7 +22,7 @@ export async function POST() {
       Authorization: `Bearer ${clinic.telnyxApiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ voice_url: voiceUrl, voice_fallback_url: voiceUrl }),
+    body: JSON.stringify({ voice_url: voiceUrl, voice_fallback_url: voiceUrl, status_callback_url: statusUrl }),
   });
 
   const data = await res.json();
