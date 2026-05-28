@@ -89,9 +89,12 @@ export async function transcribeUrlWithAuth(
   contentType: string,
   authHeader: string
 ): Promise<string> {
-  const response = await fetch(mediaUrl, {
-    headers: { Authorization: authHeader },
-  });
+  // Pre-signed S3 URLs carry auth in query params — adding a Bearer header
+  // causes a 400 "conflicting auth methods" error from AWS.
+  const isPresigned = mediaUrl.includes("X-Amz-Signature") || mediaUrl.includes("x-amz-signature");
+  const headers = isPresigned ? {} : { Authorization: authHeader };
+
+  const response = await fetch(mediaUrl, { headers });
 
   if (!response.ok) {
     throw new Error(
