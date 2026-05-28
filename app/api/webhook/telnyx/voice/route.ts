@@ -88,8 +88,8 @@ export async function POST(req: NextRequest) {
     <Say voice="Polly.Lupe" language="es-MX">${welcome}</Say>
     <Record
       action="${respondUrl}"
-      maxLength="15"
-      timeout="5"
+      maxLength="30"
+      timeout="1"
       trim="trim-silence"
       playBeep="false"
     />
