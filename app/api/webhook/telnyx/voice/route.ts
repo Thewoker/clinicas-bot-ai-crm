@@ -83,10 +83,15 @@ export async function POST(req: NextRequest) {
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
 
   return texml(`
-    <Gather input="speech" action="${respondUrl}" speechTimeout="3" language="es-MX" profanityFilter="false">
-      <Pause length="1"/>
-      <Say voice="Polly.Lupe-Neural" language="es-MX">${welcome}</Say>
-    </Gather>
+    <Pause length="1"/>
+    <Say voice="Polly.Lupe-Neural" language="es-MX">${welcome}</Say>
+    <Record
+      action="${respondUrl}"
+      maxLength="60"
+      timeout="3"
+      trim="trim-silence"
+      playBeep="false"
+    />
     <Say voice="Polly.Lupe-Neural" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
     <Hangup/>
   `);

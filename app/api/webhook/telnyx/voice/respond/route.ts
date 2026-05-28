@@ -1,13 +1,6 @@
-/**
- * POST /api/webhook/telnyx/voice/respond
- *
- * Called by Telnyx after each <Gather input="speech"> completes.
- * Receives SpeechResult (already transcribed by Telnyx), runs the Claude bot,
- * and responds with the next <Gather> turn.
- */
-
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { transcribeUrlWithAuth } from "@/lib/transcription";
 import { runBot, BotMessage, ClinicContext } from "@/lib/claude-bot";
 
 export const dynamic = "force-dynamic";
@@ -33,12 +26,17 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function sayAndGather(text: string, respondUrl: string): string {
+function sayAndRecord(text: string, respondUrl: string): string {
   const safe = escapeXml(text);
   return `
-    <Gather input="speech" action="${respondUrl}" speechTimeout="3" language="es-MX" profanityFilter="false">
-      <Say voice="Polly.Lupe-Neural" language="es-MX">${safe}</Say>
-    </Gather>
+    <Say voice="Polly.Lupe-Neural" language="es-MX">${safe}</Say>
+    <Record
+      action="${respondUrl}"
+      maxLength="60"
+      timeout="3"
+      trim="trim-silence"
+      playBeep="false"
+    />
     <Say voice="Polly.Lupe-Neural" language="es-MX">No escuché ninguna respuesta. Hasta luego.</Say>
     <Hangup/>
   `;
@@ -49,7 +47,8 @@ export async function POST(req: NextRequest) {
   const params = new URLSearchParams(text);
 
   const callSid = params.get("CallSid") ?? "";
-  const speechResult = params.get("SpeechResult") ?? "";
+  const recordingUrl = params.get("RecordingUrl") ?? "";
+  const recordingDuration = parseInt(params.get("RecordingDuration") ?? "0", 10);
   const to = params.get("To") ?? "";
   const from = params.get("From") ?? "";
 
@@ -57,7 +56,7 @@ export async function POST(req: NextRequest) {
   if (baseUrl && !baseUrl.startsWith("http")) baseUrl = `https://${baseUrl}`;
   const respondUrl = `${baseUrl}/api/webhook/telnyx/voice/respond`;
 
-  console.log("[voice/respond] params:", { callSid, to, from, speechResult: speechResult.slice(0, 80) });
+  console.log("[voice/respond] params:", { callSid, to, from, recordingDuration });
 
   const normalize = (n: string) => n.startsWith("+") ? n : `+${n}`;
   const clinic = await prisma.clinic.findFirst({
@@ -83,11 +82,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!speechResult.trim()) {
-    return texml(sayAndGather("No escuché tu respuesta. ¿Podés repetirlo?", respondUrl));
+  if (!recordingUrl || recordingDuration < 1) {
+    return texml(sayAndRecord("No escuché tu respuesta. ¿Podés repetirlo?", respondUrl));
   }
 
-  console.log(`[telnyx/voice] ${callSid} → "${speechResult}"`);
+  const telnyxApiKey = clinic.telnyxApiKey ?? "";
+  let userText: string;
+  try {
+    userText = await transcribeUrlWithAuth(recordingUrl, "audio/mpeg", `Bearer ${telnyxApiKey}`);
+  } catch (err) {
+    console.error(`[telnyx/voice] Transcription failed for call ${callSid}:`, err);
+    return texml(sayAndRecord("Tuve un problema procesando tu mensaje. ¿Podés repetirlo?", respondUrl));
+  }
+
+  if (!userText) {
+    return texml(sayAndRecord("No pude entender lo que dijiste. ¿Podés repetirlo?", respondUrl));
+  }
+
+  console.log(`[telnyx/voice] ${callSid} → "${userText}"`);
 
   const clinicCtx: ClinicContext = {
     id: clinic.id,
@@ -100,12 +112,7 @@ export async function POST(req: NextRequest) {
     timezone: clinic.timezone,
   };
 
-  const { reply, updatedHistory } = await runBot(
-    clinicCtx,
-    history,
-    speechResult,
-    `call:${callSid}`
-  );
+  const { reply, updatedHistory } = await runBot(clinicCtx, history, userText, `call:${callSid}`);
 
   if (conversation) {
     await prisma.whatsappConversation.update({
@@ -115,10 +122,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (FAREWELL_RE.test(reply)) {
-    return texml(
-      `<Say voice="Polly.Lupe-Neural" language="es-MX">${escapeXml(reply)}</Say><Hangup/>`
-    );
+    return texml(`<Say voice="Polly.Lupe-Neural" language="es-MX">${escapeXml(reply)}</Say><Hangup/>`);
   }
 
-  return texml(sayAndGather(reply, respondUrl));
+  return texml(sayAndRecord(reply, respondUrl));
 }
