@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { runBot, BotMessage, ClinicContext } from "@/lib/claude-bot";
 
@@ -59,11 +60,16 @@ export async function POST(
     return sseStream("Hola, ¿en qué puedo ayudarte?");
   }
 
-  // Build history from ElevenLabs messages (text-only, no tool calls)
-  const history: BotMessage[] = messages
-    .filter((m) => (m.role === "user" || m.role === "assistant") && m.content)
-    .slice(0, -1) // exclude last user message — runBot will add it
-    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+  // Derive a stable conversation key from the first user message + clinicId
+  const firstUserContent = messages.find((m) => m.role === "user")?.content ?? lastUser.content;
+  const convKey = createHash("md5").update(`${clinicId}:${firstUserContent.slice(0, 120)}`).digest("hex").slice(0, 20);
+  const patientPhone = `elevenlabs:${convKey}`;
+
+  // Load internal history (with tool calls) from DB
+  const conversation = await prisma.whatsappConversation.findUnique({
+    where: { clinicId_patientPhone: { clinicId: clinic.id, patientPhone } },
+  });
+  const history = (conversation?.messages ?? []) as unknown as BotMessage[];
 
   const clinicCtx: ClinicContext = {
     id: clinic.id,
@@ -78,19 +84,32 @@ export async function POST(
 
   const t0 = Date.now();
   let reply: string;
+  let updatedHistory: BotMessage[];
 
   try {
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("timeout")), 25000)
     );
-    ({ reply } = await Promise.race([
-      runBot(clinicCtx, history, lastUser.content, `elevenlabs:${clinicId}`, true),
+    ({ reply, updatedHistory } = await Promise.race([
+      runBot(clinicCtx, history, lastUser.content, patientPhone, true),
       timeout,
     ]));
     console.log(`[llm] ${clinic.name} took ${Date.now() - t0}ms → "${reply.slice(0, 80)}"`);
   } catch (err) {
     console.error("[llm] runBot error:", err);
     return sseStream("Lo siento, tuve un problema. ¿Podés repetirlo?");
+  }
+
+  // Save updated history (with tool calls) for next turn
+  if (conversation) {
+    await prisma.whatsappConversation.update({
+      where: { id: conversation.id },
+      data: { messages: updatedHistory as unknown as never[] },
+    });
+  } else {
+    await prisma.whatsappConversation.create({
+      data: { clinicId: clinic.id, patientPhone, messages: updatedHistory as unknown as never[] },
+    });
   }
 
   return sseStream(reply);
