@@ -25,7 +25,7 @@ export async function POST() {
   if (!clinic) return NextResponse.json({ error: "Clínica no encontrada" }, { status: 404 });
 
   const appUrl = getAppUrl();
-  const llmUrl = `${appUrl}/api/llm`;
+  const llmUrl = `${appUrl}/api/llm/${clinic.id}`;
   const botName = clinic.waBotName ?? `Asistente de ${clinic.name}`;
   const firstMessage = clinic.waBotWelcome ?? `Hola, soy ${botName}. ¿En qué puedo ayudarte?`;
 

@@ -46,7 +46,8 @@
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:help.elevenlabs.io)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(node -e \"const e = require\\('@elevenlabs/elevenlabs-js'\\); const keys = Object.keys\\(e\\); console.log\\(keys.filter\\(k => k.toLowerCase\\(\\).includes\\('tts'\\) || k.toLowerCase\\(\\).includes\\('model'\\)\\).join\\('\\\\n'\\)\\);\")"
+      "Bash(node -e \"const e = require\\('@elevenlabs/elevenlabs-js'\\); const keys = Object.keys\\(e\\); console.log\\(keys.filter\\(k => k.toLowerCase\\(\\).includes\\('tts'\\) || k.toLowerCase\\(\\).includes\\('model'\\)\\).join\\('\\\\n'\\)\\);\")",
+      "Bash(node -e 'const {PrismaClient} = require\\('\\\\''./app/generated/prisma'\\\\''\\); const p = new PrismaClient\\(\\); p.clinic.findFirst\\(\\).then\\(c => { console.log\\('\\\\''clinic id:'\\\\'', c?.id\\); p.$disconnect\\(\\); }\\);')"
     ]
   }
 }
