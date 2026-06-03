@@ -82,35 +82,53 @@ export async function POST(
     timezone: clinic.timezone,
   };
 
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+
+  // Send role chunk IMMEDIATELY so ElevenLabs doesn't time out waiting for first token
+  writer.write(encoder.encode(makeChunk({ role: "assistant", content: "" })));
+
   const t0 = Date.now();
-  let reply: string;
-  let updatedHistory: BotMessage[];
 
-  try {
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), 25000)
-    );
-    ({ reply, updatedHistory } = await Promise.race([
-      runBot(clinicCtx, history, lastUser.content, patientPhone, true),
-      timeout,
-    ]));
-    console.log(`[llm] ${clinic.name} took ${Date.now() - t0}ms → "${reply.slice(0, 80)}"`);
-  } catch (err) {
-    console.error("[llm] runBot error:", err);
-    return sseStream("Lo siento, tuve un problema. ¿Podés repetirlo?");
-  }
+  // Process bot in background — stream reply once ready
+  (async () => {
+    let reply = "Lo siento, tuve un problema. ¿Podés repetirlo?";
+    try {
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 25000)
+      );
+      let updatedHistory: BotMessage[];
+      ({ reply, updatedHistory } = await Promise.race([
+        runBot(clinicCtx, history, lastUser.content, patientPhone, true),
+        timeout,
+      ]));
+      console.log(`[llm] ${clinic.name} took ${Date.now() - t0}ms → "${reply.slice(0, 80)}"`);
 
-  // Save updated history (with tool calls) for next turn
-  if (conversation) {
-    await prisma.whatsappConversation.update({
-      where: { id: conversation.id },
-      data: { messages: updatedHistory as unknown as never[] },
-    });
-  } else {
-    await prisma.whatsappConversation.create({
-      data: { clinicId: clinic.id, patientPhone, messages: updatedHistory as unknown as never[] },
-    });
-  }
+      // Save history with tool calls for next turn
+      if (conversation) {
+        await prisma.whatsappConversation.update({
+          where: { id: conversation.id },
+          data: { messages: updatedHistory as unknown as never[] },
+        });
+      } else {
+        await prisma.whatsappConversation.create({
+          data: { clinicId: clinic.id, patientPhone, messages: updatedHistory as unknown as never[] },
+        });
+      }
+    } catch (err) {
+      console.error("[llm] runBot error:", err);
+    }
 
-  return sseStream(reply);
+    for (const chunk of reply.split(/(\s+)/)) {
+      if (chunk) await writer.write(encoder.encode(makeChunk({ content: chunk })));
+    }
+    await writer.write(encoder.encode(makeChunk({}, "stop")));
+    await writer.write(encoder.encode("data: [DONE]\n\n"));
+    await writer.close();
+  })();
+
+  return new Response(readable, {
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+  });
 }
