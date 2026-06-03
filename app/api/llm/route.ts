@@ -7,24 +7,32 @@ export const dynamic = "force-dynamic";
 // ElevenLabs calls this endpoint as a Custom LLM (OpenAI-compatible streaming).
 // It sends the conversation history and we respond with SSE tokens.
 
-function sseChunk(text: string): string {
-  return `data: ${JSON.stringify({ choices: [{ delta: { content: text }, index: 0, finish_reason: null }] })}\n\n`;
+function makeChunk(delta: Record<string, unknown>, finishReason: string | null = null): string {
+  const payload = {
+    id: "chatcmpl-clinicbot",
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model: "clinic-bot",
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
+  };
+  return `data: ${JSON.stringify(payload)}\n\n`;
 }
 
 function sseStream(text: string): Response {
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     start(controller) {
-      // First chunk must include role for OpenAI SSE compatibility
-      const first = JSON.stringify({ choices: [{ delta: { role: "assistant", content: "" }, index: 0, finish_reason: null }] });
-      controller.enqueue(encoder.encode(`data: ${first}\n\n`));
+      // Role chunk (OpenAI-required first chunk)
+      controller.enqueue(encoder.encode(makeChunk({ role: "assistant", content: "" })));
 
-      // Stream word by word so ElevenLabs TTS starts as early as possible
+      // Content chunks — word by word so ElevenLabs TTS starts immediately
       const words = text.split(/(\s+)/);
       for (const chunk of words) {
-        if (chunk) controller.enqueue(encoder.encode(sseChunk(chunk)));
+        if (chunk) controller.enqueue(encoder.encode(makeChunk({ content: chunk })));
       }
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: {}, index: 0, finish_reason: "stop" }] })}\n\n`));
+
+      // Stop chunk + DONE
+      controller.enqueue(encoder.encode(makeChunk({}, "stop")));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     },
