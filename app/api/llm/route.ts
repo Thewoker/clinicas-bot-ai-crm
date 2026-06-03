@@ -15,7 +15,11 @@ function sseStream(text: string): Response {
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     start(controller) {
-      // Stream in small word-sized chunks so ElevenLabs TTS starts early
+      // First chunk must include role for OpenAI SSE compatibility
+      const first = JSON.stringify({ choices: [{ delta: { role: "assistant", content: "" }, index: 0, finish_reason: null }] });
+      controller.enqueue(encoder.encode(`data: ${first}\n\n`));
+
+      // Stream word by word so ElevenLabs TTS starts as early as possible
       const words = text.split(/(\s+)/);
       for (const chunk of words) {
         if (chunk) controller.enqueue(encoder.encode(sseChunk(chunk)));
@@ -42,6 +46,10 @@ export async function POST(req: NextRequest) {
     return sseStream("Lo siento, ocurrió un error.");
   }
 
+  // Log everything ElevenLabs sends so we can debug the structure
+  console.log("[llm] incoming keys:", Object.keys(body).join(", "));
+  console.log("[llm] agent_id:", body.agent_id, "| conversation_id:", body.conversation_id);
+
   const agentId = (body.agent_id as string) ?? "";
   const conversationId = (body.conversation_id as string) ?? `el_${Date.now()}`;
 
@@ -51,8 +59,9 @@ export async function POST(req: NextRequest) {
     : null;
 
   if (!clinic) {
-    console.error("[llm] Unknown agent_id:", agentId);
-    return sseStream("Lo siento, no pude identificar la clínica.");
+    console.error("[llm] Unknown agent_id:", agentId, "— no matching clinic found");
+    // Don't hang up — say something so the call doesn't just cut
+    return sseStream("Lo siento, hay un problema de configuración. Por favor llamá directamente a la clínica.");
   }
 
   // Get the last user message from the conversation
@@ -85,17 +94,17 @@ export async function POST(req: NextRequest) {
   let updatedHistory: BotMessage[];
 
   try {
-    ({ reply, updatedHistory } = await runBot(
-      clinicCtx,
-      history,
-      lastUser.content,
-      patientPhone,
-      true // voiceMode: short responses
-    ));
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), 25000)
+    );
+    ({ reply, updatedHistory } = await Promise.race([
+      runBot(clinicCtx, history, lastUser.content, patientPhone, true),
+      timeout,
+    ]));
     console.log(`[llm] conv:${conversationId} bot took ${Date.now() - t0}ms → "${reply.slice(0, 80)}"`);
   } catch (err) {
     console.error("[llm] runBot error:", err);
-    return sseStream("Lo siento, tuve un problema al procesar tu mensaje.");
+    return sseStream("Lo siento, tuve un problema al procesar tu mensaje. ¿Podés repetirlo?");
   }
 
   // Persist history so subsequent turns have full tool-call context
