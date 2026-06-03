@@ -36,6 +36,10 @@ model Clinic {
   telnyxSipConnectionId  String?  // Credential Connection ID (SIP, required by Telnyx for WebRTC)
   telnyxSipCredentialId  String?  // Telephony credential ID for in-app WebRTC calling
 
+  // ElevenLabs Voice AI
+  elevenLabsAgentId       String?  // Auto-created ElevenLabs agent ID
+  elevenLabsPhoneNumberId String?  // ElevenLabs SIP phone number resource ID (manually configured)
+
   userClinics           UserClinic[]
   doctors               Doctor[]
   patients              Patient[]

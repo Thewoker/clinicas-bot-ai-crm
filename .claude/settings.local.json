@@ -39,7 +39,14 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\leone\\\\Desktop\\\\git\\\\clinicas-cistina-mar\\\\components\" -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize)",
       "Bash(2>&1)",
       "Bash(node -e ' *)",
-      "Bash(node -e \"require\\('@telnyx/webrtc'\\); console.log\\('ok'\\)\")"
+      "Bash(node -e \"require\\('@telnyx/webrtc'\\); console.log\\('ok'\\)\")",
+      "WebFetch(domain:elevenlabs.io)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:help.elevenlabs.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(node -e \"const e = require\\('@elevenlabs/elevenlabs-js'\\); const keys = Object.keys\\(e\\); console.log\\(keys.filter\\(k => k.toLowerCase\\(\\).includes\\('tts'\\) || k.toLowerCase\\(\\).includes\\('model'\\)\\).join\\('\\\\n'\\)\\);\")"
     ]
   }
 }

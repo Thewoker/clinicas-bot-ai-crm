@@ -52,19 +52,7 @@ export function TelnyxForm({ telnyxApiKey, telnyxPhoneNumber }: Props) {
 
       {/* API Key */}
       <div className="space-y-2">
-        <p className="text-xs font-medium text-gray-700">API Key de Telnyx</p>
-        <p className="text-xs text-gray-400">
-          Obtené tu API key en{" "}
-          <a
-            href="https://portal.telnyx.com/#/app/api-keys"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-violet-500 hover:underline inline-flex items-center gap-0.5"
-          >
-            portal.telnyx.com → API Keys
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </p>
+        <p className="text-xs font-medium text-gray-700">API Key del agente de llamadas</p>
 
         <form action={keyAction} className="flex gap-2">
           <div className="relative flex-1">
