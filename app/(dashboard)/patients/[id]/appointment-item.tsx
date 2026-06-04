@@ -95,7 +95,7 @@ export function AppointmentItem({
               {status.label}
             </span>
             <span className="text-sm font-semibold text-gray-700">
-              ${Number(appointment.price).toLocaleString("es-AR")}
+              €{Number(appointment.price).toLocaleString("es-AR")}
             </span>
           </div>
         </div>
