@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   LogOut,
   X,
+  Mic,
 } from "lucide-react";
 import clsx from "clsx";
 import { useTransition } from "react";
@@ -18,6 +19,7 @@ const navItems = [
   { href: "/admin", label: "Resumen", icon: LayoutDashboard, exact: true },
   { href: "/admin/users", label: "Usuarios", icon: Users, exact: false },
   { href: "/admin/clinics", label: "Clínicas", icon: Building2, exact: false },
+  { href: "/admin/voice", label: "Voice AI", icon: Mic, exact: false },
 ];
 
 interface AdminSidebarProps {
