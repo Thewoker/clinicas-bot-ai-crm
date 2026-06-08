@@ -64,6 +64,9 @@ export async function POST() {
         turn: {
           turnTimeout: 8,
         },
+        conversation: {
+          maxDurationSeconds: 600,
+        },
       },
     };
 

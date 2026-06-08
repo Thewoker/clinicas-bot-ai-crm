@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
           },
         },
         turn: { turnTimeout: 8 },
+        conversation: { maxDurationSeconds: 600 },
       },
     };
 

@@ -5,6 +5,12 @@ import { runBot, BotMessage, ClinicContext } from "@/lib/claude-bot";
 
 export const dynamic = "force-dynamic";
 
+// After this many assistant turns, force a polite closing to prevent infinite calls
+const MAX_VOICE_TURNS = 15;
+
+// Detect farewell phrases as a backup trigger for hanging up
+const FAREWELL_RE = /\b(hasta luego|hasta pronto|hasta otra|adiós|adios|venga[,\s]+(adiós|adios|hasta)|que (vaya|pase|tenga)|no dudes en llamar|quedamos así|un saludo$|cuidat[eo] mucho)\b/i;
+
 function makeChunk(delta: Record<string, unknown>, finishReason: string | null = null): string {
   return `data: ${JSON.stringify({
     id: "chatcmpl-clinicbot",
@@ -13,6 +19,20 @@ function makeChunk(delta: Record<string, unknown>, finishReason: string | null =
     model: "clinic-bot",
     choices: [{ index: 0, delta, finish_reason: finishReason }],
   })}\n\n`;
+}
+
+// Emits an end_call function call in the SSE stream so ElevenLabs hangs up
+async function writeEndCall(writer: WritableStreamDefaultWriter<Uint8Array>, encoder: TextEncoder) {
+  const ts = Math.floor(Date.now() / 1000);
+  const callId = `call_end_${Date.now()}`;
+  const base = { id: "chatcmpl-clinicbot", object: "chat.completion.chunk", created: ts, model: "clinic-bot" };
+  await writer.write(encoder.encode(
+    `data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: callId, type: "function", function: { name: "end_call", arguments: "" } }] }, finish_reason: null }] })}\n\n`
+  ));
+  await writer.write(encoder.encode(
+    `data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: "{}" } }] }, finish_reason: null }] })}\n\n`
+  ));
+  await writer.write(encoder.encode(makeChunk({}, "tool_calls")));
 }
 
 function sseStream(text: string): Response {
@@ -71,6 +91,12 @@ export async function POST(
   });
   const history = (conversation?.messages ?? []) as unknown as BotMessage[];
 
+  // Force closing if too many turns have elapsed (prevents infinite calls)
+  const assistantTurns = history.filter((m) => m.role === "assistant").length;
+  if (assistantTurns >= MAX_VOICE_TURNS) {
+    return sseStream("Ha pasado bastante tiempo en la llamada. Si necesitas algo más, llámanos de nuevo. ¡Hasta luego!");
+  }
+
   const clinicCtx: ClinicContext = {
     id: clinic.id,
     name: clinic.name,
@@ -93,17 +119,20 @@ export async function POST(
 
   // Process bot in background — stream reply once ready
   (async () => {
-    let reply = "Lo siento, tuve un problema. ¿Podés repetirlo?";
+    let reply = "Lo siento, tuve un problema. ¿Puedes repetirlo?";
+    let hangUp = false;
     try {
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("timeout")), 25000)
       );
       let updatedHistory: BotMessage[];
-      ({ reply, updatedHistory } = await Promise.race([
+      let shouldHangUp: boolean;
+      ({ reply, updatedHistory, shouldHangUp } = await Promise.race([
         runBot(clinicCtx, history, lastUser.content, patientPhone, true),
         timeout,
       ]));
-      console.log(`[llm] ${clinic.name} took ${Date.now() - t0}ms → "${reply.slice(0, 80)}"`);
+      hangUp = shouldHangUp || FAREWELL_RE.test(reply);
+      console.log(`[llm] ${clinic.name} took ${Date.now() - t0}ms hangUp:${hangUp} → "${reply.slice(0, 80)}"`);
 
       // Save history with tool calls for next turn
       if (conversation) {
@@ -123,7 +152,12 @@ export async function POST(
     for (const chunk of reply.split(/(\s+)/)) {
       if (chunk) await writer.write(encoder.encode(makeChunk({ content: chunk })));
     }
-    await writer.write(encoder.encode(makeChunk({}, "stop")));
+
+    if (hangUp) {
+      await writeEndCall(writer, encoder);
+    } else {
+      await writer.write(encoder.encode(makeChunk({}, "stop")));
+    }
     await writer.write(encoder.encode("data: [DONE]\n\n"));
     await writer.close();
   })();

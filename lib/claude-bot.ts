@@ -237,6 +237,19 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+// Herramientas exclusivas para llamadas de voz
+const VOICE_ONLY_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "terminar_llamada",
+    description:
+      "Cuelga la llamada telefónica. Úsala cuando: (1) el paciente se despide y la gestión ha concluido, (2) has completado lo que pedía el paciente y no necesita nada más, (3) la conversación ha llegado a su fin natural. SIEMPRE di una frase de despedida ANTES de llamar a esta herramienta — ella corta la línea inmediatamente.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+];
+
 // ─── Tool execution ───────────────────────────────────────────────────────────
 
 async function executeTool(
@@ -749,6 +762,10 @@ async function executeTool(
       return { available: true, doctor: doctor.name, nextAvailableDays: results };
     }
 
+    case "terminar_llamada": {
+      return { hangUp: true };
+    }
+
     case "solicitar_atencion_humana": {
       createNotification({
         clinicId,
@@ -782,7 +799,7 @@ function buildSystemPrompt(clinic: ClinicContext, patientPhone = ""): string {
   });
 
   return `Eres ${botName}, la asistente virtual de ${clinic.name}.
-Respondes en español de España, de manera cálida, natural y concisa — como una recepcionista humana, nunca como un bot. Usa un registro cercano y amable, con expresiones propias del español peninsular (tú, vosotros si aplica, etc.). Evita el voseo y los modismos latinoamericanos.
+Respondes en español de España, de manera cálida, natural y concisa — como una recepcionista española, nunca como un bot. Usa jerga y expresiones cotidianas del español peninsular: "venga", "vale", "a ver", "oye", "mira", "claro que sí", "fenomenal", "estupendo", "marchando", "¿para qué más te puedo ayudar?", "no te preocupes", "para lo que necesites". Tutea siempre. Evita totalmente el voseo y los modismos latinoamericanos — nunca uses "acá", "allá", "vos", "dale", "che", "ta bien", "re bien", "¿cachai?".
 
 INFORMACIÓN DE LA CLÍNICA:
 - Nombre: ${clinic.name}
@@ -797,9 +814,13 @@ REGLAS DE COMPORTAMIENTO:
 - Antes de crear una cita, confirma el médico, día, hora y servicio con el paciente
 - Antes de cancelar una cita, pide confirmación explícita
 - Si hay ambigüedad en la fecha (ej: "el viernes"), asume el próximo que venga
-- Cuando el paciente dé su nombre, búscalo en el sistema antes de pedirle más datos${patientPhone ? ` — también puedes buscarlo por su número de WhatsApp: ${patientPhone}` : ""}
-- Si el paciente ya está registrado, salúdale por su nombre
-- Para identificar al paciente, prefiere siempre buscar primero por su número de teléfono (más fiable que el nombre); solo busca por nombre si el teléfono no da resultados${patientPhone ? `\n- El número de WhatsApp desde el que escribe este paciente es: ${patientPhone}. Úsalo como primera búsqueda en buscar_paciente antes de pedir el nombre` : ""}
+- IDENTIFICACIÓN DEL PACIENTE — SECUENCIA OBLIGATORIA ANTES DE CREAR CUALQUIER CITA O REGISTRO:
+  1. Pide el número de teléfono PRIMERO: "Para buscarte en el sistema, ¿me puedes dar tu número de teléfono?"
+  2. Llama a buscar_paciente con ese número
+  3. Si hay coincidencia, confirma: "¿Eres [Nombre]?" — si confirma, usa ese perfil existente
+  4. Solo si NO hay coincidencia, pide el nombre completo y crea un nuevo paciente con el teléfono ya recogido${patientPhone && !patientPhone.startsWith("elevenlabs:") && !patientPhone.startsWith("call:") ? `\n  El número desde el que contacta este paciente es: ${patientPhone} — úsalo directamente en el paso 2 sin pedírselo` : ""}
+  NUNCA crees un paciente nuevo sin haber buscado antes por teléfono — esto evita duplicados en el sistema
+- Si el paciente ya está registrado, salúdale por su nombre y no le pidas datos que ya tienes
 - Responde mensajes cortos con respuestas cortas, no seas verboso
 - En caso de errores técnicos, discúlpate y sugiere contactar a la clínica directamente
 - Si el paciente pide hablar con una persona real, un representante o el equipo de la clínica, usa la herramienta solicitar_atencion_humana e infórmale que el equipo le contactará pronto
@@ -837,7 +858,7 @@ export async function runBot(
   newUserMessage: string,
   patientPhone: string = "",
   voiceMode: boolean = false
-): Promise<{ reply: string; updatedHistory: BotMessage[] }> {
+): Promise<{ reply: string; updatedHistory: BotMessage[]; shouldHangUp: boolean }> {
   // Load knowledge base if not already provided
   if (!clinic.knowledgeBase) {
     const kb = await prisma.knowledgeBase.findMany({
@@ -872,9 +893,12 @@ export async function runBot(
   const trimmed = raw.slice(startAt);
 
   let current = [...trimmed];
+  let shouldHangUp = false;
+
+  const activeTools = voiceMode ? [...TOOLS, ...VOICE_ONLY_TOOLS] : TOOLS;
 
   const systemPrompt = buildSystemPrompt(clinic, patientPhone) + (voiceMode
-    ? "\n\nMODO VOZ ACTIVO: Estás en una llamada telefónica. Responde SIEMPRE en 1 o 2 frases cortas y naturales, como una recepcionista humana por teléfono. NUNCA uses listas, guiones, asteriscos, numeraciones ni formatos de texto — solo texto hablado. Sé directa y concisa."
+    ? "\n\nMODO VOZ ACTIVO: Estás en una llamada telefónica. Responde SIEMPRE en 1 o 2 frases cortas y naturales, como una recepcionista española por teléfono. NUNCA uses listas, guiones, asteriscos, numeraciones ni formatos de texto — solo texto hablado. Sé directa y concisa.\n- Cuando el paciente se despida o la gestión esté completada y no necesite nada más, di una frase de despedida natural (ej: 'Venga, hasta luego, que vaya bien.') y llama inmediatamente a terminar_llamada para colgar. No esperes más turnos si el paciente ya se ha despedido."
     : "");
 
   // Tool use loop — runs until Claude returns end_turn with text
@@ -883,7 +907,7 @@ export async function runBot(
       model: "claude-haiku-4-5-20251001", // fast + cheap for chatbot
       max_tokens: voiceMode ? 300 : 1024,
       system: systemPrompt,
-      tools: TOOLS,
+      tools: activeTools,
       messages: current as Anthropic.MessageParam[],
     });
 
@@ -896,7 +920,7 @@ export async function runBot(
 
       current.push({ role: "assistant", content: response.content });
 
-      return { reply: text, updatedHistory: current };
+      return { reply: text, updatedHistory: current, shouldHangUp };
     }
 
     if (response.stop_reason === "tool_use") {
@@ -917,6 +941,9 @@ export async function runBot(
             clinic.timezone,
             patientPhone
           );
+          if (typeof result === "object" && result !== null && (result as { hangUp?: boolean }).hangUp) {
+            shouldHangUp = true;
+          }
           return {
             type: "tool_result" as const,
             tool_use_id: block.id,
@@ -934,7 +961,8 @@ export async function runBot(
   }
 
   return {
-    reply: "Lo siento, no pude procesar tu mensaje. Por favor contactá a la clínica directamente.",
+    reply: "Lo siento, no pude procesar tu mensaje. Por favor contacta a la clínica directamente.",
     updatedHistory: current,
+    shouldHangUp: false,
   };
 }
