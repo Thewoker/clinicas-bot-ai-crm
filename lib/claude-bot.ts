@@ -12,6 +12,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 import { createNotification } from "@/lib/notifications";
+import { sendAppointmentInvite } from "@/lib/ical-email";
 import { format, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -255,10 +256,11 @@ const VOICE_ONLY_TOOLS: Anthropic.Tool[] = [
 async function executeTool(
   name: string,
   input: Record<string, string>,
-  clinicId: string,
-  tz: string,
+  clinic: ClinicContext,
   patientPhone: string = ""
 ): Promise<unknown> {
+  const clinicId = clinic.id;
+  const tz = clinic.timezone;
   switch (name) {
     case "buscar_paciente": {
       const patients = await prisma.patient.findMany({
@@ -491,8 +493,8 @@ async function executeTool(
           status: "SCHEDULED",
         },
         include: {
-          doctor: { select: { name: true } },
-          patient: { select: { name: true } },
+          doctor: { select: { name: true, email: true } },
+          patient: { select: { name: true, email: true } },
         },
       });
 
@@ -506,6 +508,16 @@ async function executeTool(
         body: `${appointment.patient.name} reservó un turno con ${appointment.doctor.name} el ${dateStr}`,
         metadata: { appointmentId: appointment.id, patientPhone },
       }).catch(console.error);
+
+      sendAppointmentInvite({
+        id: appointment.id,
+        service: appointment.service,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        doctor: { name: appointment.doctor.name, email: appointment.doctor.email },
+        patient: { name: appointment.patient.name, email: appointment.patient.email },
+        clinic: { name: clinic.name, address: clinic.address, timezone: tz },
+      });
 
       return {
         success: true,
@@ -937,8 +949,7 @@ export async function runBot(
           const result = await executeTool(
             block.name,
             block.input as Record<string, string>,
-            clinic.id,
-            clinic.timezone,
+            clinic,
             patientPhone
           );
           if (typeof result === "object" && result !== null && (result as { hangUp?: boolean }).hangUp) {
