@@ -50,7 +50,7 @@ async function sendReminders() {
           await whatsappManager.sendMessage(
             apt.clinic.id,
             apt.patient.phone,
-            `Hola ${apt.patient.name} 👋 Te recordamos que tenés un turno *${label}*:\n\n📅 ${dateStr}\n👨‍⚕️ ${apt.doctor.name}\n\nSi necesitás cancelar o reprogramar, escribinos con tiempo.`
+            `Hola ${apt.patient.name} 👋 Te recordamos que tienes un turno *${label}*:\n\n📅 ${dateStr}\n👨‍⚕️ ${apt.doctor.name}${apt.clinic.address ? `\n📍 ${apt.clinic.address}` : ""}\n\nSi necesitas cancelar o reprogramar, escríbenos con tiempo.`
           );
         } catch (err) {
           console.error(`[reminders] Patient notify failed (${apt.patient.phone}):`, err);
