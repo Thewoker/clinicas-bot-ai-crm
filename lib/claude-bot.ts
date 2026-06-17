@@ -947,12 +947,14 @@ export async function runBot(
       // Execute all tool calls and collect results
       const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
         toolUseBlocks.map(async (block) => {
+          console.log(`[bot] tool_call: ${block.name}`, JSON.stringify(block.input));
           const result = await executeTool(
             block.name,
             block.input as Record<string, string>,
             clinic,
             patientPhone
           );
+          console.log(`[bot] tool_result: ${block.name}`, JSON.stringify(result));
           if (typeof result === "object" && result !== null && (result as { hangUp?: boolean }).hangUp) {
             shouldHangUp = true;
           }

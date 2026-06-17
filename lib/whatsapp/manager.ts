@@ -239,7 +239,7 @@ class WhatsAppManager {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     downloadMediaMessage: any
   ): Promise<void> {
-    console.error("[wa] handleIncoming START", msg?.key?.remoteJid);
+    console.log("[wa] handleIncoming START", msg?.key?.remoteJid);
     const clinic = await prisma.clinic.findUnique({
       where: { id: clinicId },
       select: {
