@@ -75,3 +75,18 @@ export async function updatePatient(
   revalidatePath("/patients");
   return { success: "Paciente actualizado correctamente" };
 }
+
+export async function deletePatient(id: string): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session) return { error: "No autorizado" };
+
+  const patient = await prisma.patient.findFirst({
+    where: { id, clinicId: session.clinicId },
+  });
+  if (!patient) return { error: "Paciente no encontrado" };
+
+  await prisma.patient.delete({ where: { id } });
+
+  revalidatePath("/patients");
+  return { success: "Paciente eliminado" };
+}

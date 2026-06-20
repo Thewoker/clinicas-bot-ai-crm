@@ -5,7 +5,7 @@ import { Users, Phone, Mail, CalendarDays, FileText, Search } from "lucide-react
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import Link from "next/link";
-import { NewPatientButton, EditPatientButton } from "./patient-action-buttons";
+import { NewPatientButton, EditPatientButton, DeletePatientButton } from "./patient-action-buttons";
 
 interface Patient {
   id: string;
@@ -131,6 +131,7 @@ export function PatientList({
                         notes: patient.notes,
                       }}
                     />
+                    <DeletePatientButton patient={{ id: patient.id, name: patient.name }} />
                   </div>
                 </div>
 
@@ -191,6 +192,7 @@ export function PatientList({
                         notes: patient.notes,
                       }}
                     />
+                    <DeletePatientButton patient={{ id: patient.id, name: patient.name }} />
                   </div>
                 </div>
               </div>
